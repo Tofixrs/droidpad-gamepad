@@ -4,7 +4,8 @@ _: {
     craneLib,
     ...
   }: {
-    packages = {
+    packages = rec {
+      default = droidpad-gamepad;
       droidpad-gamepad = import ./droidpad-gamepad.nix {
         inherit pkgs craneLib;
       };
