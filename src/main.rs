@@ -1,10 +1,9 @@
+mod controller;
+mod keys;
 mod message;
-use std::{
-    net::SocketAddr,
-    time::{SystemTime, UNIX_EPOCH},
-};
 
-use anyhow::{Context, anyhow};
+use std::net::SocketAddr;
+
 use axum::{
     Router,
     extract::{
@@ -14,14 +13,12 @@ use axum::{
     response::IntoResponse,
     routing::any,
 };
-use evdev_rs::{
-    AbsInfo, DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice,
-    enums::{BusType, EV_ABS, EV_KEY, EV_REL, EV_SYN, EventCode},
-};
-use log::error;
+use log::{error, info};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+use crate::{controller::Controller, keys::Keys};
 
 #[tokio::main]
 async fn main() {
@@ -55,86 +52,55 @@ async fn ws_handler(
 }
 
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
-    let mut device = create_controller(std::format!("droidpad-{}", who.ip())).unwrap();
-    while let Some(msg) = socket.recv().await {
-        let Ok(msg) = msg else {
-            continue;
-        };
-        if let Message::Close(_) = msg {
-            break;
-        };
-        let Message::Text(t) = msg else {
-            continue;
-        };
-        if let Err(err) = handle_messages(&t, &mut device).await {
-            error!("{err}, {}", t.as_str());
-        };
+    let name = std::format!("droidpad-{}", who.ip());
+    match Controller::new(&name) {
+        Ok(controller) => {
+            while let Some(msg) = socket.recv().await {
+                let Ok(msg) = msg else {
+                    continue;
+                };
+                if let Message::Close(_) = msg {
+                    info!("{name}: Disconnect");
+                    break;
+                };
+                let Message::Text(t) = msg else {
+                    continue;
+                };
+                if let Err(err) = handle_messages(&t, &controller).await {
+                    error!("{err}, {}", t.as_str());
+                };
+            }
+        }
+        Err(err) => {
+            error!("{err}");
+        }
     }
+    // match create_controller(&name) {
+    //     Ok(mut device) => {
+    //         while let Some(msg) = socket.recv().await {
+    //             let Ok(msg) = msg else {
+    //                 continue;
+    //             };
+    //             if let Message::Close(_) = msg {
+    //                 info!("{name}: Disconnect");
+    //                 drop(device);
+    //                 break;
+    //             };
+    //             let Message::Text(t) = msg else {
+    //                 continue;
+    //             };
+    //             if let Err(err) = handle_messages(&t, &mut device).await {
+    //                 error!("{err}, {}", t.as_str());
+    //             };
+    //         }
+    //     }
+    //     Err(err) => {
+    //         error!("{err}");
+    //     }
+    // }
 }
 
-const UINPUT_AXIS_MIN: i32 = -32768;
-const UINPUT_AXIS_MAX: i32 = 32767;
-
-fn create_controller(name: String) -> anyhow::Result<UInputDevice> {
-    let u = UninitDevice::new().ok_or(anyhow!("Failed to create UninitDevice"))?;
-    u.set_name(&name);
-    u.set_bustype(BusType::BUS_VIRTUAL as u16);
-    u.set_vendor_id(0x045e);
-    u.set_product_id(0x028e);
-
-    let abs_info = AbsInfo {
-        value: 0,
-        minimum: UINPUT_AXIS_MIN,
-        maximum: UINPUT_AXIS_MAX,
-        fuzz: 0,
-        flat: 0,
-        resolution: 0,
-    };
-    u.enable(EventCode::EV_SYN(EV_SYN::SYN_REPORT))?;
-    u.enable_event_code(
-        &EventCode::EV_ABS(EV_ABS::ABS_X),
-        Some(evdev_rs::EnableCodeData::AbsInfo(abs_info)),
-    )?;
-    u.enable_event_code(
-        &EventCode::EV_ABS(EV_ABS::ABS_Y),
-        Some(evdev_rs::EnableCodeData::AbsInfo(abs_info)),
-    )?;
-    u.enable_event_code(
-        &EventCode::EV_ABS(EV_ABS::ABS_RX),
-        Some(evdev_rs::EnableCodeData::AbsInfo(abs_info)),
-    )?;
-    u.enable_event_code(
-        &EventCode::EV_ABS(EV_ABS::ABS_RY),
-        Some(evdev_rs::EnableCodeData::AbsInfo(abs_info)),
-    )?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_SOUTH))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_EAST))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_NORTH))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_WEST))?;
-
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_DPAD_UP))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_DPAD_DOWN))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_DPAD_LEFT))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_DPAD_RIGHT))?;
-
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_TL))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_TL2))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_TR))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_TR2))?;
-
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_START))?;
-    u.enable(EventCode::EV_KEY(EV_KEY::BTN_SELECT))?;
-
-    UInputDevice::create_from_device(&u).with_context(|| "Failed to create uinput device")
-}
-
-fn map_float_to_axis_value(f: f32) -> i32 {
-    let scaled_value =
-        ((f + 1.0) / 2.0) * (UINPUT_AXIS_MAX - UINPUT_AXIS_MIN) as f32 + UINPUT_AXIS_MIN as f32;
-    scaled_value.round() as i32
-}
-
-async fn handle_messages(msg: &Utf8Bytes, device: &mut UInputDevice) -> anyhow::Result<()> {
+async fn handle_messages(msg: &Utf8Bytes, device: &Controller) -> anyhow::Result<()> {
     let controller_msg = serde_json::from_str::<message::Message>(msg)?;
 
     match controller_msg {
@@ -144,94 +110,47 @@ async fn handle_messages(msg: &Utf8Bytes, device: &mut UInputDevice) -> anyhow::
             state,
         } => {
             let input = match button.as_str() {
-                "LEFT" => EV_KEY::BTN_DPAD_LEFT,
-                "RIGHT" => EV_KEY::BTN_DPAD_RIGHT,
-                "UP" => EV_KEY::BTN_DPAD_UP,
-                "DOWN" => EV_KEY::BTN_DPAD_DOWN,
+                "LEFT" => Keys::DPadLeft(state),
+                "RIGHT" => Keys::DPadRight(state),
+                "UP" => Keys::DPadUp(state),
+                "DOWN" => Keys::DPadDown(state),
                 _ => unreachable!(),
             };
 
-            device.write_event(&InputEvent::new(
-                &timeval_now(),
-                &EventCode::EV_KEY(input),
-                state as i32,
-            ))?;
+            device.send_key(input)?;
         }
         message::Message::Joystick { id, x, y } => match id.as_str() {
             "left" => {
-                device.write_event(&InputEvent::new(
-                    &timeval_now(),
-                    &EventCode::EV_ABS(EV_ABS::ABS_X),
-                    map_float_to_axis_value(x),
-                ))?;
-                device.write_event(&InputEvent::new(
-                    &timeval_now(),
-                    &EventCode::EV_ABS(EV_ABS::ABS_Y),
-                    -map_float_to_axis_value(y),
-                ))?;
+                device.send_key(Keys::LeftJoystickX(x))?;
+                device.send_key(Keys::LeftJoystickY(y))?;
             }
             "right" => {
-                device.write_event(&InputEvent::new(
-                    &timeval_now(),
-                    &EventCode::EV_ABS(EV_ABS::ABS_RX),
-                    map_float_to_axis_value(x),
-                ))?;
-                device.write_event(&InputEvent::new(
-                    &timeval_now(),
-                    &EventCode::EV_ABS(EV_ABS::ABS_RY),
-                    -map_float_to_axis_value(y),
-                ))?;
+                device.send_key(Keys::RightJoystickX(x))?;
+                device.send_key(Keys::RightJoystickY(y))?;
             }
             _ => {}
         },
         message::Message::Button { id, state } => {
             let input = match id.as_str() {
-                "A" => Some(EV_KEY::BTN_SOUTH),
-                "B" => Some(EV_KEY::BTN_EAST),
-                "X" => Some(EV_KEY::BTN_WEST),
-                "Y" => Some(EV_KEY::BTN_NORTH),
-                "lb" => Some(EV_KEY::BTN_TL),
-                "lt" => Some(EV_KEY::BTN_TL2),
-                "rb" => Some(EV_KEY::BTN_TR),
-                "rt" => Some(EV_KEY::BTN_TR2),
-                "start" => Some(EV_KEY::BTN_START),
-                "back" => Some(EV_KEY::BTN_SELECT),
+                "A" => Some(Keys::A(state)),
+                "B" => Some(Keys::B(state)),
+                "X" => Some(Keys::X(state)),
+                "Y" => Some(Keys::Y(state)),
+                "lb" => Some(Keys::BumperLeft(state)),
+                "lt" => Some(Keys::TriggerLeft(state)),
+                "rb" => Some(Keys::BumperRight(state)),
+                "rt" => Some(Keys::TriggerRight(state)),
+                "start" => Some(Keys::Start(state)),
+                "back" => Some(Keys::Select(state)),
                 _ => None,
             };
             let Some(input) = input else {
                 return Ok(());
             };
-
-            device.write_event(&InputEvent::new(
-                &timeval_now(),
-                &EventCode::EV_KEY(input),
-                state as i32,
-            ))?;
+            device.send_key(input)?;
         }
     };
-    synchronize(device)?;
-
-    Ok(())
-}
-
-fn timeval_now() -> TimeVal {
-    let now = SystemTime::now();
-    let duration_since_epoch = now.duration_since(UNIX_EPOCH).unwrap();
-
-    let tv_sec = duration_since_epoch.as_secs();
-    let tv_usec = duration_since_epoch.subsec_micros();
-
-    TimeVal {
-        tv_sec: tv_sec as i64,
-        tv_usec: tv_usec as i64,
-    }
-}
-fn synchronize(device: &mut UInputDevice) -> anyhow::Result<()> {
-    device.write_event(&InputEvent::new(
-        &timeval_now(),
-        &EventCode::EV_SYN(EV_SYN::SYN_REPORT),
-        0,
-    ))?;
+    device.synchronize()?;
 
     Ok(())
 }
