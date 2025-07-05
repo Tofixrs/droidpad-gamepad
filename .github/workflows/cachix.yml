@@ -19,7 +19,7 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@v2
       - uses: cachix/cachix-action@v14
         with:
-          name: sm-gui-editor
+          name: tofix-cache
           # If you chose API tokens for write access OR if you have a private cache
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
       - run: nix build .
