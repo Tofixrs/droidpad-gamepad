@@ -54,7 +54,7 @@ async fn ws_handler(
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
     let name = std::format!("droidpad-{}", who.ip());
     match Controller::new(&name) {
-        Ok(controller) => {
+        Ok(mut controller) => {
             while let Some(msg) = socket.recv().await {
                 let Ok(msg) = msg else {
                     continue;
@@ -66,7 +66,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
                 let Message::Text(t) = msg else {
                     continue;
                 };
-                if let Err(err) = handle_messages(&t, &controller).await {
+                if let Err(err) = handle_messages(&t, &mut controller).await {
                     error!("{err}, {}", t.as_str());
                 };
             }
@@ -75,32 +75,9 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
             error!("{err}");
         }
     }
-    // match create_controller(&name) {
-    //     Ok(mut device) => {
-    //         while let Some(msg) = socket.recv().await {
-    //             let Ok(msg) = msg else {
-    //                 continue;
-    //             };
-    //             if let Message::Close(_) = msg {
-    //                 info!("{name}: Disconnect");
-    //                 drop(device);
-    //                 break;
-    //             };
-    //             let Message::Text(t) = msg else {
-    //                 continue;
-    //             };
-    //             if let Err(err) = handle_messages(&t, &mut device).await {
-    //                 error!("{err}, {}", t.as_str());
-    //             };
-    //         }
-    //     }
-    //     Err(err) => {
-    //         error!("{err}");
-    //     }
-    // }
 }
 
-async fn handle_messages(msg: &Utf8Bytes, device: &Controller) -> anyhow::Result<()> {
+async fn handle_messages(msg: &Utf8Bytes, device: &mut Controller) -> anyhow::Result<()> {
     let controller_msg = serde_json::from_str::<message::Message>(msg)?;
 
     match controller_msg {
