@@ -22,4 +22,4 @@ jobs:
           name: sm-gui-editor
           # If you chose API tokens for write access OR if you have a private cache
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - run: nix build .
+      - run: ${{ inputs.command }}
