@@ -13,6 +13,7 @@ use axum::{
     response::IntoResponse,
     routing::any,
 };
+use clap::Parser;
 use log::{error, info};
 use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
@@ -20,8 +21,15 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{controller::Controller, keys::Keys};
 
+#[derive(Debug, Parser)]
+struct Args {
+    #[arg(short, long, default_value_t = 1715)]
+    port: u16,
+}
+
 #[tokio::main]
 async fn main() {
+    let args = Args::parse();
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -33,12 +41,15 @@ async fn main() {
     let router = Router::new().route("/", any(ws_handler)).layer(
         TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)),
     );
-    let listener = TcpListener::bind("0.0.0.0:1715").await.unwrap();
+    let listener = TcpListener::bind(std::format!("0.0.0.0:{}", args.port))
+        .await
+        .unwrap();
     info!(
-        "Listening on: {}:1715",
+        "Listening on: {}:{}",
         local_ip_address::local_ip()
             .map(|v| v.to_string())
-            .unwrap_or(String::from("local_ip"))
+            .unwrap_or(String::from("local_ip")),
+        args.port
     );
 
     axum::serve(
