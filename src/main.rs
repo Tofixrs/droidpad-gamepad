@@ -24,9 +24,8 @@ use crate::{controller::Controller, keys::Keys};
 async fn main() {
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                format!("{}=debug,tower_http=debug", env!("CARGO_CRATE_NAME")).into()
-            }),
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -35,6 +34,12 @@ async fn main() {
         TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)),
     );
     let listener = TcpListener::bind("0.0.0.0:1715").await.unwrap();
+    info!(
+        "Listening on: {}:1715",
+        local_ip_address::local_ip()
+            .map(|v| v.to_string())
+            .unwrap_or(String::from("local_ip"))
+    );
 
     axum::serve(
         listener,
@@ -55,12 +60,13 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
     let name = std::format!("droidpad-{}", who.ip());
     match Controller::new(&name) {
         Ok(mut controller) => {
+            info!("New controller connected: {name}");
             while let Some(msg) = socket.recv().await {
                 let Ok(msg) = msg else {
                     continue;
                 };
                 if let Message::Close(_) = msg {
-                    info!("{name}: Disconnect");
+                    info!("Controller disconnected: {name}");
                     break;
                 };
                 let Message::Text(t) = msg else {
