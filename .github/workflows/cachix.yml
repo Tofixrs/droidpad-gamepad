@@ -1,15 +1,19 @@
 name: "Push cachix"
 on:
   pull_request:
+    branches:
+      - master
     paths-ignore:
       - "README.md"
       - "LICENSE"
   push:
+    branches:
+      - master
     paths-ignore:
       - "README.md"
       - "LICENSE"
 jobs:
-  tests:
+  update-cachix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
