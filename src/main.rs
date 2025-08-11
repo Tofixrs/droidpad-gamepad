@@ -25,6 +25,10 @@ use crate::{controller::Controller, keys::Key};
 struct Args {
     #[arg(short, long, default_value_t = 1715)]
     port: u16,
+    //TODO: test for a good default
+    /// Decides what amount of time can pass between clicks to hold (-1 to disable)
+    #[arg(short, long, default_value_t = 200)]
+    double_tap_timing: i128,
 }
 
 #[tokio::main]

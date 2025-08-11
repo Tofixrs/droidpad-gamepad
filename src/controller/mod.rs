@@ -12,8 +12,6 @@ pub use windows::*;
 
 use crate::message::KeyEvent;
 
-const DOUBLE_TAP_TIME_MS: u128 = 200;
-
 #[derive(Debug, Default)]
 pub enum KeyState {
     Pressed,

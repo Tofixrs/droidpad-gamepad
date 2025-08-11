@@ -11,7 +11,8 @@ use evdev_rs::enums::EventCode;
 
 use anyhow::anyhow;
 
-use crate::controller::{DOUBLE_TAP_TIME_MS, KeyState};
+use crate::Args;
+use crate::controller::KeyState;
 use crate::keys::Key;
 use crate::message::KeyEvent;
 
@@ -115,7 +116,8 @@ impl Controller {
                 self.device.write_event(&key.into())?;
             }
             (KeyState::Released, KeyEvent::Press) => {
-                if last_time.elapsed().as_millis() < DOUBLE_TAP_TIME_MS {
+                let args = Args::parse();
+                if (last_time.elapsed().as_millis() as i128) < args.double_tap_timing {
                     self.keys_state.insert(key.into(), KeyState::Held);
                     self.device.write_event(&key.into())?;
                 } else {

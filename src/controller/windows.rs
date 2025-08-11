@@ -4,14 +4,11 @@ use std::{
     time::Instant,
 };
 
+use clap::Parser;
 use log::info;
 use vjoy::{ButtonState, Device, VJoy};
 
-use crate::{
-    controller::{DOUBLE_TAP_TIME_MS, KeyState},
-    keys::Key,
-    message::KeyEvent,
-};
+use crate::{Args, controller::KeyState, keys::Key, message::KeyEvent};
 use anyhow::anyhow;
 
 pub struct Controller {
@@ -82,7 +79,8 @@ impl Controller {
                 write_event(t)?;
             }
             (KeyState::Released, KeyEvent::Press) => {
-                if last_time.elapsed().as_millis() < DOUBLE_TAP_TIME_MS {
+                let args = Args::parse();
+                if (last_time.elapsed().as_millis() as i128) < args.double_tap_timing {
                     self.keys_state.insert(key.into(), KeyState::Held);
                     write_event(t)?;
                 } else {
