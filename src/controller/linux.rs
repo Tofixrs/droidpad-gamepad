@@ -1,4 +1,5 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::collections::HashMap;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use evdev_rs::InputEvent;
 use evdev_rs::TimeVal;
@@ -9,14 +10,20 @@ use evdev_rs::enums::EV_SYN;
 use evdev_rs::enums::EventCode;
 
 use anyhow::anyhow;
+use clap::Parser;
 
-use crate::keys::Keys;
+use crate::Args;
+use crate::controller::KeyState;
+use crate::keys::Key;
+use crate::message::KeyEvent;
 
 const UINPUT_AXIS_MIN: i32 = -32768;
 const UINPUT_AXIS_MAX: i32 = 32767;
 
 pub struct Controller {
     device: UInputDevice,
+    keys_state: HashMap<u8, KeyState>,
+    double_tap_state: HashMap<u8, Instant>,
 }
 
 impl Controller {
@@ -77,10 +84,52 @@ impl Controller {
 
         Ok(Self {
             device: UInputDevice::create_from_device(&u)?,
+            keys_state: HashMap::default(),
+            double_tap_state: HashMap::default(),
         })
     }
-    pub fn send_key(&self, key: Keys) -> anyhow::Result<()> {
-        self.device.write_event(&key.into())?;
+    pub fn handle_key(&mut self, key: Key) -> anyhow::Result<()> {
+        let Some(key_event) = key.key_event() else {
+            //we ignore joysticks; they dont have btn state
+            self.device.write_event(&key.into())?;
+            return Ok(());
+        };
+
+        let Some(last_time) = self.double_tap_state.get(&key.into()) else {
+            // this key wasnt registered yet we dont care to check if double clicked
+            self.double_tap_state.insert(key.into(), Instant::now());
+            self.keys_state.insert(key.into(), (*key_event).into());
+            self.device.write_event(&key.into())?;
+            return Ok(());
+        };
+        //this will never fail (i think lol). We always insert key state in the last let else
+        let key_state = self.keys_state.get(&key.into()).unwrap();
+
+        match (key_state, key_event) {
+            (KeyState::Pressed, KeyEvent::Release) => {
+                self.keys_state.insert(key.into(), KeyState::Released);
+                self.device.write_event(&key.into())?;
+            }
+            // dont do anythin cuz we just started holdin
+            (KeyState::Held, KeyEvent::Release) => {}
+            (KeyState::Held, KeyEvent::Press) => {
+                self.keys_state.insert(key.into(), KeyState::Pressed);
+                self.device.write_event(&key.into())?;
+            }
+            (KeyState::Released, KeyEvent::Press) => {
+                let args = Args::parse();
+                if (last_time.elapsed().as_millis() as i128) < args.double_tap_timing {
+                    self.keys_state.insert(key.into(), KeyState::Held);
+                    self.device.write_event(&key.into())?;
+                } else {
+                    self.keys_state.insert(key.into(), KeyState::Pressed);
+                    self.double_tap_state.insert(key.into(), Instant::now());
+                    self.device.write_event(&key.into())?;
+                }
+            }
+            (KeyState::Released, KeyEvent::Release) => {}
+            (KeyState::Pressed, KeyEvent::Press) => {}
+        }
 
         Ok(())
     }
@@ -114,39 +163,37 @@ fn map_float_to_axis_value(f: f32) -> i32 {
     scaled_value.round() as i32
 }
 
-impl From<Keys> for InputEvent {
-    fn from(val: Keys) -> Self {
+impl From<Key> for InputEvent {
+    fn from(val: Key) -> Self {
         let (ev_code, val) = match val {
-            Keys::LeftJoystickX(v) => {
-                (EventCode::EV_ABS(EV_ABS::ABS_X), map_float_to_axis_value(v))
-            }
-            Keys::LeftJoystickY(v) => (
+            Key::LeftJoystickX(v) => (EventCode::EV_ABS(EV_ABS::ABS_X), map_float_to_axis_value(v)),
+            Key::LeftJoystickY(v) => (
                 EventCode::EV_ABS(EV_ABS::ABS_Y),
                 -map_float_to_axis_value(v),
             ),
-            Keys::RightJoystickX(v) => (
+            Key::RightJoystickX(v) => (
                 EventCode::EV_ABS(EV_ABS::ABS_RX),
                 map_float_to_axis_value(v),
             ),
-            Keys::RightJoystickY(v) => (
+            Key::RightJoystickY(v) => (
                 EventCode::EV_ABS(EV_ABS::ABS_RY),
                 -map_float_to_axis_value(v),
             ),
-            Keys::DPadUp(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_UP), state as i32),
-            Keys::DPadDown(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_DOWN), state as i32),
-            Keys::DPadLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_LEFT), state as i32),
-            Keys::DPadRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_RIGHT), state as i32),
+            Key::DPadUp(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_UP), state as i32),
+            Key::DPadDown(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_DOWN), state as i32),
+            Key::DPadLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_LEFT), state as i32),
+            Key::DPadRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_RIGHT), state as i32),
 
-            Keys::A(state) => (EventCode::EV_KEY(EV_KEY::BTN_SOUTH), state as i32),
-            Keys::B(state) => (EventCode::EV_KEY(EV_KEY::BTN_EAST), state as i32),
-            Keys::X(state) => (EventCode::EV_KEY(EV_KEY::BTN_WEST), state as i32),
-            Keys::Y(state) => (EventCode::EV_KEY(EV_KEY::BTN_NORTH), state as i32),
-            Keys::Start(state) => (EventCode::EV_KEY(EV_KEY::BTN_START), state as i32),
-            Keys::Select(state) => (EventCode::EV_KEY(EV_KEY::BTN_SELECT), state as i32),
-            Keys::TriggerLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_TL2), state as i32),
-            Keys::BumperLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_TL), state as i32),
-            Keys::TriggerRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR2), state as i32),
-            Keys::BumperRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR), state as i32),
+            Key::A(state) => (EventCode::EV_KEY(EV_KEY::BTN_SOUTH), state as i32),
+            Key::B(state) => (EventCode::EV_KEY(EV_KEY::BTN_EAST), state as i32),
+            Key::X(state) => (EventCode::EV_KEY(EV_KEY::BTN_WEST), state as i32),
+            Key::Y(state) => (EventCode::EV_KEY(EV_KEY::BTN_NORTH), state as i32),
+            Key::Start(state) => (EventCode::EV_KEY(EV_KEY::BTN_START), state as i32),
+            Key::Select(state) => (EventCode::EV_KEY(EV_KEY::BTN_SELECT), state as i32),
+            Key::TriggerLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_TL2), state as i32),
+            Key::BumperLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_TL), state as i32),
+            Key::TriggerRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR2), state as i32),
+            Key::BumperRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR), state as i32),
         };
 
         InputEvent::new(&timeval_now(), &ev_code, val)

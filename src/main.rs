@@ -19,12 +19,16 @@ use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{controller::Controller, keys::Keys};
+use crate::{controller::Controller, keys::Key};
 
 #[derive(Debug, Parser)]
 struct Args {
     #[arg(short, long, default_value_t = 1715)]
     port: u16,
+    //TODO: test for a good default
+    /// Decides what amount of time can pass between clicks to hold (-1 to disable)
+    #[arg(short, long, default_value_t = 200)]
+    double_tap_timing: i128,
 }
 
 #[tokio::main]
@@ -104,44 +108,44 @@ async fn handle_messages(msg: &Utf8Bytes, device: &mut Controller) -> anyhow::Re
             state,
         } => {
             let input = match button.as_str() {
-                "LEFT" => Keys::DPadLeft(state),
-                "RIGHT" => Keys::DPadRight(state),
-                "UP" => Keys::DPadUp(state),
-                "DOWN" => Keys::DPadDown(state),
+                "LEFT" => Key::DPadLeft(state),
+                "RIGHT" => Key::DPadRight(state),
+                "UP" => Key::DPadUp(state),
+                "DOWN" => Key::DPadDown(state),
                 _ => unreachable!(),
             };
 
-            device.send_key(input)?;
+            device.handle_key(input)?;
         }
         message::Message::Joystick { id, x, y } => match id.as_str() {
             "left" => {
-                device.send_key(Keys::LeftJoystickX(x))?;
-                device.send_key(Keys::LeftJoystickY(y))?;
+                device.handle_key(Key::LeftJoystickX(x))?;
+                device.handle_key(Key::LeftJoystickY(y))?;
             }
             "right" => {
-                device.send_key(Keys::RightJoystickX(x))?;
-                device.send_key(Keys::RightJoystickY(y))?;
+                device.handle_key(Key::RightJoystickX(x))?;
+                device.handle_key(Key::RightJoystickY(y))?;
             }
             _ => {}
         },
         message::Message::Button { id, state } => {
             let input = match id.as_str() {
-                "A" => Some(Keys::A(state)),
-                "B" => Some(Keys::B(state)),
-                "X" => Some(Keys::X(state)),
-                "Y" => Some(Keys::Y(state)),
-                "lb" => Some(Keys::BumperLeft(state)),
-                "lt" => Some(Keys::TriggerLeft(state)),
-                "rb" => Some(Keys::BumperRight(state)),
-                "rt" => Some(Keys::TriggerRight(state)),
-                "start" => Some(Keys::Start(state)),
-                "back" => Some(Keys::Select(state)),
+                "A" => Some(Key::A(state)),
+                "B" => Some(Key::B(state)),
+                "X" => Some(Key::X(state)),
+                "Y" => Some(Key::Y(state)),
+                "lb" => Some(Key::BumperLeft(state)),
+                "lt" => Some(Key::TriggerLeft(state)),
+                "rb" => Some(Key::BumperRight(state)),
+                "rt" => Some(Key::TriggerRight(state)),
+                "start" => Some(Key::Start(state)),
+                "back" => Some(Key::Select(state)),
                 _ => None,
             };
             let Some(input) = input else {
                 return Ok(());
             };
-            device.send_key(input)?;
+            device.handle_key(input)?;
         }
     };
     device.synchronize()?;
