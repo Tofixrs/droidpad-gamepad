@@ -10,6 +10,7 @@ use evdev_rs::enums::EV_SYN;
 use evdev_rs::enums::EventCode;
 
 use anyhow::anyhow;
+use clap::Parser;
 
 use crate::Args;
 use crate::controller::KeyState;
