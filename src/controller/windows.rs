@@ -3,11 +3,13 @@ use std::sync::{LazyLock, Mutex};
 use log::info;
 use vjoy::{ButtonState, Device, VJoy};
 
-use crate::{keys::Keys, message::State};
+use crate::{keys::Key, message::State};
 use anyhow::anyhow;
 
 pub struct Controller {
     device: Device,
+    keys_state: HashMap<u8, KeyState>,
+    double_tap_state: HashMap<u8, Instant>,
 }
 
 static VJOY_ID: LazyLock<Mutex<u8>> = LazyLock::new(|| Mutex::new(1));
@@ -27,9 +29,13 @@ impl Controller {
         let device = vjoy.get_device_state(device_id.clone() as u32)?;
         info!("Connecting vjoy device {device_id}");
         *device_id += 1;
-        Ok(Self { device })
+        Ok(Self {
+            device,
+            keys_state: HashMap::default(),
+            double_tap_state: HashMap::default(),
+        })
     }
-    pub fn send_key(&mut self, key: Keys) -> anyhow::Result<()> {
+    pub fn handle_key(&mut self, key: Key) -> anyhow::Result<()> {
         let t: (u8, Value) = key.into();
 
         match t {
@@ -77,27 +83,27 @@ impl From<State> for Value {
     }
 }
 
-impl From<Keys> for (u8, Value) {
-    fn from(value: Keys) -> Self {
+impl From<Key> for (u8, Value) {
+    fn from(value: Key) -> Self {
         match value {
-            Keys::A(state) => (1, state.into()),
-            Keys::B(state) => (2, state.into()),
-            Keys::X(state) => (3, state.into()),
-            Keys::Y(state) => (4, state.into()),
-            Keys::LeftJoystickX(x) => (1, Value::Axis(map_vjoy(x))),
-            Keys::LeftJoystickY(y) => (2, Value::Axis(map_vjoy(-y))),
-            Keys::RightJoystickX(x) => (3, Value::Axis(map_vjoy(x))),
-            Keys::RightJoystickY(y) => (4, Value::Axis(map_vjoy(-y))),
-            Keys::BumperLeft(state) => (5, state.into()),
-            Keys::BumperRight(state) => (6, state.into()),
-            Keys::TriggerLeft(state) => (7, state.into()),
-            Keys::TriggerRight(state) => (8, state.into()),
-            Keys::Select(state) => (9, state.into()),
-            Keys::Start(state) => (10, state.into()),
-            Keys::DPadUp(state) => (13, state.into()),
-            Keys::DPadDown(state) => (14, state.into()),
-            Keys::DPadLeft(state) => (15, state.into()),
-            Keys::DPadRight(state) => (16, state.into()),
+            Key::A(state) => (1, state.into()),
+            Key::B(state) => (2, state.into()),
+            Key::X(state) => (3, state.into()),
+            Key::Y(state) => (4, state.into()),
+            Key::LeftJoystickX(x) => (1, Value::Axis(map_vjoy(x))),
+            Key::LeftJoystickY(y) => (2, Value::Axis(map_vjoy(-y))),
+            Key::RightJoystickX(x) => (3, Value::Axis(map_vjoy(x))),
+            Key::RightJoystickY(y) => (4, Value::Axis(map_vjoy(-y))),
+            Key::BumperLeft(state) => (5, state.into()),
+            Key::BumperRight(state) => (6, state.into()),
+            Key::TriggerLeft(state) => (7, state.into()),
+            Key::TriggerRight(state) => (8, state.into()),
+            Key::Select(state) => (9, state.into()),
+            Key::Start(state) => (10, state.into()),
+            Key::DPadUp(state) => (13, state.into()),
+            Key::DPadDown(state) => (14, state.into()),
+            Key::DPadLeft(state) => (15, state.into()),
+            Key::DPadRight(state) => (16, state.into()),
         }
     }
 }
