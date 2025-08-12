@@ -140,6 +140,8 @@ async fn handle_messages(msg: &Utf8Bytes, device: &mut Controller) -> anyhow::Re
                 "rt" => Some(Key::TriggerRight(state)),
                 "start" => Some(Key::Start(state)),
                 "back" => Some(Key::Select(state)),
+                "thumb_right" => Some(Key::ThumbRight(state)),
+                "thumb_left" => Some(Key::ThumbLeft(state)),
                 _ => None,
             };
             let Some(input) = input else {

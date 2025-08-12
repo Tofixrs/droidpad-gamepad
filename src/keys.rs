@@ -6,6 +6,8 @@ pub enum Key {
     LeftJoystickY(f32),
     RightJoystickX(f32),
     RightJoystickY(f32),
+    ThumbRight(KeyEvent),
+    ThumbLeft(KeyEvent),
     DPadUp(KeyEvent),
     DPadDown(KeyEvent),
     DPadLeft(KeyEvent),
@@ -43,6 +45,8 @@ impl Key {
             Key::BumperLeft(state) => Some(state),
             Key::TriggerRight(state) => Some(state),
             Key::BumperRight(state) => Some(state),
+            Key::ThumbRight(key_event) => Some(key_event),
+            Key::ThumbLeft(key_event) => Some(key_event),
         }
     }
 }
@@ -68,6 +72,8 @@ impl From<Key> for u8 {
             Key::BumperLeft(_) => 15,
             Key::TriggerRight(_) => 16,
             Key::BumperRight(_) => 17,
+            Key::ThumbRight(_) => 18,
+            Key::ThumbLeft(_) => 19,
         }
     }
 }

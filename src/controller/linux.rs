@@ -64,6 +64,9 @@ impl Controller {
             &EventCode::EV_ABS(EV_ABS::ABS_RY),
             Some(evdev_rs::EnableCodeData::AbsInfo(abs_info)),
         )?;
+        u.enable(EventCode::EV_KEY(EV_KEY::BTN_THUMBL))?;
+        u.enable(EventCode::EV_KEY(EV_KEY::BTN_THUMBR))?;
+        u.enable(EventCode::EV_KEY(EV_KEY::BTN_SOUTH))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_SOUTH))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_EAST))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_NORTH))?;
@@ -183,7 +186,6 @@ impl From<Key> for InputEvent {
             Key::DPadDown(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_DOWN), state as i32),
             Key::DPadLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_LEFT), state as i32),
             Key::DPadRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_RIGHT), state as i32),
-
             Key::A(state) => (EventCode::EV_KEY(EV_KEY::BTN_SOUTH), state as i32),
             Key::B(state) => (EventCode::EV_KEY(EV_KEY::BTN_EAST), state as i32),
             Key::X(state) => (EventCode::EV_KEY(EV_KEY::BTN_WEST), state as i32),
@@ -194,6 +196,8 @@ impl From<Key> for InputEvent {
             Key::BumperLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_TL), state as i32),
             Key::TriggerRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR2), state as i32),
             Key::BumperRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR), state as i32),
+            Key::ThumbRight(key_event) => (EventCode::EV_KEY(EV_KEY::BTN_THUMBR), key_event as i32),
+            Key::ThumbLeft(key_event) => (EventCode::EV_KEY(EV_KEY::BTN_THUMBL), key_event as i32),
         };
 
         InputEvent::new(&timeval_now(), &ev_code, val)
