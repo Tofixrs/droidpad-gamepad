@@ -22,8 +22,6 @@ const UINPUT_AXIS_MAX: i32 = 32767;
 
 pub struct Controller {
     device: UInputDevice,
-    keys_state: HashMap<u8, KeyState>,
-    double_tap_state: HashMap<u8, Instant>,
 }
 
 impl Controller {
@@ -64,6 +62,9 @@ impl Controller {
             &EventCode::EV_ABS(EV_ABS::ABS_RY),
             Some(evdev_rs::EnableCodeData::AbsInfo(abs_info)),
         )?;
+        u.enable(EventCode::EV_KEY(EV_KEY::BTN_THUMBL))?;
+        u.enable(EventCode::EV_KEY(EV_KEY::BTN_THUMBR))?;
+        u.enable(EventCode::EV_KEY(EV_KEY::BTN_SOUTH))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_SOUTH))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_EAST))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_NORTH))?;
@@ -84,53 +85,10 @@ impl Controller {
 
         Ok(Self {
             device: UInputDevice::create_from_device(&u)?,
-            keys_state: HashMap::default(),
-            double_tap_state: HashMap::default(),
         })
     }
-    pub fn handle_key(&mut self, key: Key) -> anyhow::Result<()> {
-        let Some(key_event) = key.key_event() else {
-            //we ignore joysticks; they dont have btn state
-            self.device.write_event(&key.into())?;
-            return Ok(());
-        };
-
-        let Some(last_time) = self.double_tap_state.get(&key.into()) else {
-            // this key wasnt registered yet we dont care to check if double clicked
-            self.double_tap_state.insert(key.into(), Instant::now());
-            self.keys_state.insert(key.into(), (*key_event).into());
-            self.device.write_event(&key.into())?;
-            return Ok(());
-        };
-        //this will never fail (i think lol). We always insert key state in the last let else
-        let key_state = self.keys_state.get(&key.into()).unwrap();
-
-        match (key_state, key_event) {
-            (KeyState::Pressed, KeyEvent::Release) => {
-                self.keys_state.insert(key.into(), KeyState::Released);
-                self.device.write_event(&key.into())?;
-            }
-            // dont do anythin cuz we just started holdin
-            (KeyState::Held, KeyEvent::Release) => {}
-            (KeyState::Held, KeyEvent::Press) => {
-                self.keys_state.insert(key.into(), KeyState::Pressed);
-                self.device.write_event(&key.into())?;
-            }
-            (KeyState::Released, KeyEvent::Press) => {
-                let args = Args::parse();
-                if (last_time.elapsed().as_millis() as i128) < args.double_tap_timing {
-                    self.keys_state.insert(key.into(), KeyState::Held);
-                    self.device.write_event(&key.into())?;
-                } else {
-                    self.keys_state.insert(key.into(), KeyState::Pressed);
-                    self.double_tap_state.insert(key.into(), Instant::now());
-                    self.device.write_event(&key.into())?;
-                }
-            }
-            (KeyState::Released, KeyEvent::Release) => {}
-            (KeyState::Pressed, KeyEvent::Press) => {}
-        }
-
+    pub fn write_input(&mut self, key: Key) -> anyhow::Result<()> {
+        self.device.write_event(&key.into())?;
         Ok(())
     }
     pub fn synchronize(&self) -> anyhow::Result<()> {
@@ -183,7 +141,6 @@ impl From<Key> for InputEvent {
             Key::DPadDown(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_DOWN), state as i32),
             Key::DPadLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_LEFT), state as i32),
             Key::DPadRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_RIGHT), state as i32),
-
             Key::A(state) => (EventCode::EV_KEY(EV_KEY::BTN_SOUTH), state as i32),
             Key::B(state) => (EventCode::EV_KEY(EV_KEY::BTN_EAST), state as i32),
             Key::X(state) => (EventCode::EV_KEY(EV_KEY::BTN_WEST), state as i32),
@@ -194,6 +151,8 @@ impl From<Key> for InputEvent {
             Key::BumperLeft(state) => (EventCode::EV_KEY(EV_KEY::BTN_TL), state as i32),
             Key::TriggerRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR2), state as i32),
             Key::BumperRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR), state as i32),
+            Key::ThumbRight(key_event) => (EventCode::EV_KEY(EV_KEY::BTN_THUMBR), key_event as i32),
+            Key::ThumbLeft(key_event) => (EventCode::EV_KEY(EV_KEY::BTN_THUMBL), key_event as i32),
         };
 
         InputEvent::new(&timeval_now(), &ev_code, val)
