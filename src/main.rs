@@ -192,7 +192,6 @@ async fn handle_messages(
             //this will never fail (i think lol). We always insert key state in the last let else
             let key_state = keys_state.get(&input.into()).unwrap();
 
-            println!("{key_state:?} {key_event:?}");
             match (key_state, key_event) {
                 (KeyState::Pressed, KeyEvent::Release) => {
                     keys_state.insert(input.into(), KeyState::Released);

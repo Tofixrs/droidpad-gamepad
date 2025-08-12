@@ -1,20 +1,13 @@
-use std::{
-    collections::HashMap,
-    sync::{LazyLock, Mutex},
-    time::Instant,
-};
+use std::sync::{LazyLock, Mutex};
 
-use clap::Parser;
 use log::info;
 use vjoy::{ButtonState, Device, VJoy};
 
-use crate::{Args, controller::KeyState, keys::Key, message::KeyEvent};
+use crate::{keys::Key, message::KeyEvent};
 use anyhow::anyhow;
 
 pub struct Controller {
     device: Device,
-    keys_state: HashMap<u8, KeyState>,
-    double_tap_state: HashMap<u8, Instant>,
 }
 
 static VJOY_ID: LazyLock<Mutex<u8>> = LazyLock::new(|| Mutex::new(1));
@@ -34,64 +27,14 @@ impl Controller {
         let device = vjoy.get_device_state(device_id.clone() as u32)?;
         info!("Connecting vjoy device {device_id}");
         *device_id += 1;
-        Ok(Self {
-            device,
-            keys_state: HashMap::default(),
-            double_tap_state: HashMap::default(),
-        })
+        Ok(Self { device })
     }
-    pub fn handle_key(&mut self, key: Key) -> anyhow::Result<()> {
+    pub fn write_input(&mut self, key: Key) -> anyhow::Result<()> {
         let t: (u8, Value) = key.into();
-
-        let mut write_event = |v: (u8, Value)| -> anyhow::Result<()> {
-            match v {
-                (axis, Value::Axis(v)) => self.device.set_axis(axis as u32, v),
-                (key, Value::Button(state)) => self.device.set_button(key, state),
-            }?;
-
-            Ok(())
-        };
-        let Some(key_event) = key.key_event() else {
-            //we ignore joysticks; they dont have btn state
-            write_event(t)?;
-            return Ok(());
-        };
-
-        let Some(last_time) = self.double_tap_state.get(&key.into()) else {
-            // this key wasnt registered yet we dont care to check if double clicked
-            self.double_tap_state.insert(key.into(), Instant::now());
-            self.keys_state.insert(key.into(), (*key_event).into());
-            write_event(t)?;
-            return Ok(());
-        };
-        //this will never fail (i think lol). We always insert key state in the last let else
-        let key_state = self.keys_state.get(&key.into()).unwrap();
-
-        match (key_state, key_event) {
-            (KeyState::Pressed, KeyEvent::Release) => {
-                self.keys_state.insert(key.into(), KeyState::Released);
-                write_event(t)?;
-            }
-            // dont do anythin cuz we just started holdin
-            (KeyState::Held, KeyEvent::Release) => {}
-            (KeyState::Held, KeyEvent::Press) => {
-                self.keys_state.insert(key.into(), KeyState::Pressed);
-                write_event(t)?;
-            }
-            (KeyState::Released, KeyEvent::Press) => {
-                let args = Args::parse();
-                if (last_time.elapsed().as_millis() as i128) < args.double_tap_timing {
-                    self.keys_state.insert(key.into(), KeyState::Held);
-                    write_event(t)?;
-                } else {
-                    self.keys_state.insert(key.into(), KeyState::Pressed);
-                    self.double_tap_state.insert(key.into(), Instant::now());
-                    write_event(t)?;
-                }
-            }
-            (KeyState::Released, KeyEvent::Release) => {}
-            (KeyState::Pressed, KeyEvent::Press) => {}
-        }
+        match t {
+            (axis, Value::Axis(v)) => self.device.set_axis(axis as u32, v),
+            (key, Value::Button(state)) => self.device.set_button(key, state),
+        }?;
 
         Ok(())
     }
@@ -151,6 +94,8 @@ impl From<Key> for (u8, Value) {
             Key::TriggerRight(state) => (8, state.into()),
             Key::Select(state) => (9, state.into()),
             Key::Start(state) => (10, state.into()),
+            Key::ThumbLeft(key_event) => (11, key_event.into()),
+            Key::ThumbRight(key_event) => (12, key_event.into()),
             Key::DPadUp(state) => (13, state.into()),
             Key::DPadDown(state) => (14, state.into()),
             Key::DPadLeft(state) => (15, state.into()),
