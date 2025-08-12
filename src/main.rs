@@ -2,7 +2,7 @@ mod controller;
 mod keys;
 mod message;
 
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr, time::Instant};
 
 use axum::{
     Router,
@@ -19,7 +19,11 @@ use tokio::net::TcpListener;
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{controller::Controller, keys::Key};
+use crate::{
+    controller::{Controller, KeyState},
+    keys::Key,
+    message::KeyEvent,
+};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -27,8 +31,12 @@ struct Args {
     port: u16,
     //TODO: test for a good default
     /// Decides what amount of time can pass between clicks to hold (-1 to disable)
-    #[arg(short, long, default_value_t = 200)]
+    #[arg(long, default_value_t = 200)]
     double_tap_timing: i128,
+    /// Sets the postfix that the button has to havbe for it to have double tap to hold. Set to
+    /// empty string for all keys
+    #[arg(long, default_value_t = String::from("_dth"))]
+    double_tap_postfix: String,
 }
 
 #[tokio::main]
@@ -76,6 +84,8 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
     match Controller::new(&name) {
         Ok(mut controller) => {
             info!("New controller connected: {name}");
+            let mut keys_state: HashMap<u8, KeyState> = HashMap::new();
+            let mut double_tap_state: HashMap<u8, Instant> = HashMap::new();
             while let Some(msg) = socket.recv().await {
                 let Ok(msg) = msg else {
                     continue;
@@ -87,7 +97,10 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
                 let Message::Text(t) = msg else {
                     continue;
                 };
-                if let Err(err) = handle_messages(&t, &mut controller).await {
+                if let Err(err) =
+                    handle_messages(&t, &mut controller, &mut keys_state, &mut double_tap_state)
+                        .await
+                {
                     error!("{err}, {}", t.as_str());
                 };
             }
@@ -98,7 +111,12 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
     }
 }
 
-async fn handle_messages(msg: &Utf8Bytes, device: &mut Controller) -> anyhow::Result<()> {
+async fn handle_messages(
+    msg: &Utf8Bytes,
+    device: &mut Controller,
+    keys_state: &mut HashMap<u8, KeyState>,
+    double_tap_state: &mut HashMap<u8, Instant>,
+) -> anyhow::Result<()> {
     let controller_msg = serde_json::from_str::<message::Message>(msg)?;
 
     match controller_msg {
@@ -115,21 +133,26 @@ async fn handle_messages(msg: &Utf8Bytes, device: &mut Controller) -> anyhow::Re
                 _ => unreachable!(),
             };
 
-            device.handle_key(input)?;
+            device.write_input(input)?;
         }
         message::Message::Joystick { id, x, y } => match id.as_str() {
             "left" => {
-                device.handle_key(Key::LeftJoystickX(x))?;
-                device.handle_key(Key::LeftJoystickY(y))?;
+                device.write_input(Key::LeftJoystickX(x))?;
+                device.write_input(Key::LeftJoystickY(y))?;
             }
             "right" => {
-                device.handle_key(Key::RightJoystickX(x))?;
-                device.handle_key(Key::RightJoystickY(y))?;
+                device.write_input(Key::RightJoystickX(x))?;
+                device.write_input(Key::RightJoystickY(y))?;
             }
             _ => {}
         },
         message::Message::Button { id, state } => {
-            let input = match id.as_str() {
+            let args = Args::parse();
+            let input = match id
+                .split_once(&args.double_tap_postfix)
+                .map(|(before, _)| before)
+                .unwrap_or(&id)
+            {
                 "A" => Some(Key::A(state)),
                 "B" => Some(Key::B(state)),
                 "X" => Some(Key::X(state)),
@@ -147,7 +170,53 @@ async fn handle_messages(msg: &Utf8Bytes, device: &mut Controller) -> anyhow::Re
             let Some(input) = input else {
                 return Ok(());
             };
-            device.handle_key(input)?;
+
+            let Some(key_event) = input.key_event() else {
+                //we ignore joysticks; we handle them earlier
+                return Ok(());
+            };
+
+            if !id.ends_with(&args.double_tap_postfix) {
+                device.write_input(input)?;
+                device.synchronize()?;
+                return Ok(());
+            };
+
+            let Some(last_time) = double_tap_state.get(&input.into()) else {
+                // this key wasnt registered yet we dont care to check if double clicked
+                double_tap_state.insert(input.into(), Instant::now());
+                keys_state.insert(input.into(), (*key_event).into());
+                device.write_input(input)?;
+                return Ok(());
+            };
+            //this will never fail (i think lol). We always insert key state in the last let else
+            let key_state = keys_state.get(&input.into()).unwrap();
+
+            println!("{key_state:?} {key_event:?}");
+            match (key_state, key_event) {
+                (KeyState::Pressed, KeyEvent::Release) => {
+                    keys_state.insert(input.into(), KeyState::Released);
+                    device.write_input(input)?;
+                }
+                // dont do anythin cuz we just started holdin
+                (KeyState::Held, KeyEvent::Release) => {}
+                (KeyState::Held, KeyEvent::Press) => {
+                    keys_state.insert(input.into(), KeyState::Pressed);
+                    device.write_input(input)?;
+                }
+                (KeyState::Released, KeyEvent::Press) => {
+                    if (last_time.elapsed().as_millis() as i128) < args.double_tap_timing {
+                        keys_state.insert(input.into(), KeyState::Held);
+                        device.write_input(input)?;
+                    } else {
+                        keys_state.insert(input.into(), KeyState::Pressed);
+                        double_tap_state.insert(input.into(), Instant::now());
+                        device.write_input(input)?;
+                    }
+                }
+                (KeyState::Released, KeyEvent::Release) => {}
+                (KeyState::Pressed, KeyEvent::Press) => {}
+            }
         }
     };
     device.synchronize()?;

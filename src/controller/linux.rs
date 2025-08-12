@@ -22,8 +22,6 @@ const UINPUT_AXIS_MAX: i32 = 32767;
 
 pub struct Controller {
     device: UInputDevice,
-    keys_state: HashMap<u8, KeyState>,
-    double_tap_state: HashMap<u8, Instant>,
 }
 
 impl Controller {
@@ -87,53 +85,10 @@ impl Controller {
 
         Ok(Self {
             device: UInputDevice::create_from_device(&u)?,
-            keys_state: HashMap::default(),
-            double_tap_state: HashMap::default(),
         })
     }
-    pub fn handle_key(&mut self, key: Key) -> anyhow::Result<()> {
-        let Some(key_event) = key.key_event() else {
-            //we ignore joysticks; they dont have btn state
-            self.device.write_event(&key.into())?;
-            return Ok(());
-        };
-
-        let Some(last_time) = self.double_tap_state.get(&key.into()) else {
-            // this key wasnt registered yet we dont care to check if double clicked
-            self.double_tap_state.insert(key.into(), Instant::now());
-            self.keys_state.insert(key.into(), (*key_event).into());
-            self.device.write_event(&key.into())?;
-            return Ok(());
-        };
-        //this will never fail (i think lol). We always insert key state in the last let else
-        let key_state = self.keys_state.get(&key.into()).unwrap();
-
-        match (key_state, key_event) {
-            (KeyState::Pressed, KeyEvent::Release) => {
-                self.keys_state.insert(key.into(), KeyState::Released);
-                self.device.write_event(&key.into())?;
-            }
-            // dont do anythin cuz we just started holdin
-            (KeyState::Held, KeyEvent::Release) => {}
-            (KeyState::Held, KeyEvent::Press) => {
-                self.keys_state.insert(key.into(), KeyState::Pressed);
-                self.device.write_event(&key.into())?;
-            }
-            (KeyState::Released, KeyEvent::Press) => {
-                let args = Args::parse();
-                if (last_time.elapsed().as_millis() as i128) < args.double_tap_timing {
-                    self.keys_state.insert(key.into(), KeyState::Held);
-                    self.device.write_event(&key.into())?;
-                } else {
-                    self.keys_state.insert(key.into(), KeyState::Pressed);
-                    self.double_tap_state.insert(key.into(), Instant::now());
-                    self.device.write_event(&key.into())?;
-                }
-            }
-            (KeyState::Released, KeyEvent::Release) => {}
-            (KeyState::Pressed, KeyEvent::Press) => {}
-        }
-
+    pub fn write_input(&mut self, key: Key) -> anyhow::Result<()> {
+        self.device.write_event(&key.into())?;
         Ok(())
     }
     pub fn synchronize(&self) -> anyhow::Result<()> {
