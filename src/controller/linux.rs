@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use evdev_rs::InputEvent;
 use evdev_rs::TimeVal;
@@ -11,10 +10,7 @@ use evdev_rs::enums::EventCode;
 
 use anyhow::anyhow;
 
-use crate::controller::Options;
-use crate::controller::KeyState;
 use crate::keys::Key;
-use crate::message::KeyEvent;
 
 const UINPUT_AXIS_MIN: i32 = -32768;
 const UINPUT_AXIS_MAX: i32 = 32767;

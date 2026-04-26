@@ -14,6 +14,7 @@ craneLib.buildPackage {
     pkg-config
   ];
   buildInputs = with pkgs; [
+    dbus
     libevdev
   ];
 }

@@ -1,29 +1,26 @@
 mod controller;
 mod keys;
 mod message;
+mod transport;
 
-use std::{collections::HashMap, net::SocketAddr, time::Instant};
+use std::{collections::HashMap, time::Instant};
 
-use axum::{
-    Router,
-    extract::{
-        ConnectInfo, WebSocketUpgrade,
-        ws::{Message, Utf8Bytes, WebSocket},
-    },
-    response::IntoResponse,
-    routing::any,
-};
 use clap::Parser;
 use log::{error, info};
-use tokio::net::TcpListener;
-use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
     controller::{Controller, KeyState, Options as ControllerOptions},
     keys::Key,
     message::KeyEvent,
+    transport::{Transport, TransportConnection},
 };
+#[cfg(feature = "ws")]
+use crate::transport::ws::{WsTransport, WsTransportConnection};
+#[cfg(all(feature = "bluetooth", target_os = "linux"))]
+use crate::transport::bluetooth::{BluetoothTransport, BluetoothTransportConnection};
+#[cfg(all(feature = "bluetooth", target_os = "windows"))]
+use crate::transport::bluetooth_windows::{BluetoothTransport, BluetoothTransportConnection};
 
 #[derive(Clone, Debug, Parser)]
 struct Args {
@@ -40,6 +37,98 @@ struct Args {
 
     #[command(flatten)]
     controller: ControllerOptions,
+
+    #[arg(long, value_enum, default_value_t = default_transport_kind())]
+    transport: TransportKind,
+
+    #[cfg(all(feature = "bluetooth", target_os = "linux"))]
+    #[arg(long, default_value_t = 3)]
+    bt_channel: u8,
+}
+
+#[derive(Clone, Copy, Debug, clap::ValueEnum)]
+enum TransportKind {
+    #[cfg(feature = "ws")]
+    Ws,
+    #[cfg(feature = "bluetooth")]
+    Bluetooth,
+}
+
+const fn default_transport_kind() -> TransportKind {
+    #[cfg(feature = "ws")]
+    {
+        TransportKind::Ws
+    }
+
+    #[cfg(all(not(feature = "ws"), feature = "bluetooth"))]
+    {
+        TransportKind::Bluetooth
+    }
+}
+
+enum RuntimeTransport {
+    #[cfg(feature = "ws")]
+    Ws(WsTransport),
+    #[cfg(feature = "bluetooth")]
+    Bluetooth(BluetoothTransport),
+}
+
+impl RuntimeTransport {
+    fn new(kind: TransportKind) -> Self {
+        match kind {
+            #[cfg(feature = "ws")]
+            TransportKind::Ws => Self::Ws(WsTransport::new()),
+            #[cfg(feature = "bluetooth")]
+            TransportKind::Bluetooth => Self::Bluetooth(BluetoothTransport::new()),
+        }
+    }
+
+    async fn listen(&mut self, args: Args) -> anyhow::Result<()> {
+        match self {
+            #[cfg(feature = "ws")]
+            Self::Ws(transport) => transport.listen(args).await,
+            #[cfg(feature = "bluetooth")]
+            Self::Bluetooth(transport) => transport.listen(args).await,
+        }
+    }
+
+    async fn accept(&mut self, args: Args) -> anyhow::Result<RuntimeConnection> {
+        match self {
+            #[cfg(feature = "ws")]
+            Self::Ws(transport) => Ok(RuntimeConnection::Ws(transport.accept(args).await?)),
+            #[cfg(feature = "bluetooth")]
+            Self::Bluetooth(transport) => {
+                Ok(RuntimeConnection::Bluetooth(transport.accept(args).await?))
+            }
+        }
+    }
+}
+
+enum RuntimeConnection {
+    #[cfg(feature = "ws")]
+    Ws(WsTransportConnection),
+    #[cfg(feature = "bluetooth")]
+    Bluetooth(BluetoothTransportConnection),
+}
+
+impl TransportConnection for RuntimeConnection {
+    fn peer_name(&self) -> String {
+        match self {
+            #[cfg(feature = "ws")]
+            Self::Ws(connection) => connection.peer_name(),
+            #[cfg(feature = "bluetooth")]
+            Self::Bluetooth(connection) => connection.peer_name(),
+        }
+    }
+
+    async fn recv_message(&mut self) -> anyhow::Result<Option<message::Message>> {
+        match self {
+            #[cfg(feature = "ws")]
+            Self::Ws(connection) => connection.recv_message().await,
+            #[cfg(feature = "bluetooth")]
+            Self::Bluetooth(connection) => connection.recv_message().await,
+        }
+    }
 }
 
 #[tokio::main]
@@ -53,93 +142,70 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let router = Router::new()
-        .route("/", any({
-            let args = args.clone();
-            move |ws, connect_info| ws_handler(ws, connect_info, args.clone())
-        }))
-        .layer(
-        TraceLayer::new_for_http().make_span_with(DefaultMakeSpan::default().include_headers(true)),
-    );
-    let listener = TcpListener::bind(std::format!("0.0.0.0:{}", args.port))
-        .await
-        .unwrap();
-    info!(
-        "Listening on: {}:{}",
-        local_ip_address::local_ip()
-            .map(|v| v.to_string())
-            .unwrap_or(String::from("local_ip")),
-        args.port
-    );
     if let Err(err) = args.controller.initialize() {
         error!("Failed to initialize controller backend: {err}");
     }
 
-    axum::serve(
-        listener,
-        router.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+    let mut transport = RuntimeTransport::new(args.transport);
+    if let Err(err) = transport.listen(args.clone()).await {
+        error!("Failed to initialize transport listener: {err}");
+        return;
+    }
+
+    loop {
+        match transport.accept(args.clone()).await {
+            Ok(connection) => {
+                let args = args.clone();
+                tokio::spawn(async move {
+                    if let Err(err) = handle_connection(connection, args).await {
+                        error!("{err}");
+                    }
+                });
+            }
+            Err(err) => {
+                error!("Failed to accept transport connection: {err}");
+            }
+        }
+    }
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    args: Args,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, addr, args))
-}
-
-async fn handle_socket(mut socket: WebSocket, who: SocketAddr, args: Args) {
-    let name = std::format!("droidpad-{}", who.ip());
+async fn handle_connection<C>(mut connection: C, args: Args) -> anyhow::Result<()>
+where
+    C: TransportConnection + Send + 'static,
+{
+    let name = connection.peer_name();
 
     match Controller::new(&name, &args.controller) {
         Ok(mut controller) => {
             info!("New controller connected: {name}");
             let mut keys_state: HashMap<u8, KeyState> = HashMap::new();
             let mut double_tap_state: HashMap<u8, Instant> = HashMap::new();
-            while let Some(msg) = socket.recv().await {
-                let Ok(msg) = msg else {
-                    continue;
-                };
-                if let Message::Close(_) = msg {
-                    info!("Controller disconnected: {name}");
-                    break;
-                };
-                let Message::Text(t) = msg else {
-                    continue;
-                };
-                if let Err(err) =
-                    handle_messages(
-                        &t,
-                        &mut controller,
-                        &mut keys_state,
-                        &mut double_tap_state,
-                        &args,
-                    )
-                        .await
-                {
-                    error!("{err}, {}", t.as_str());
-                };
+
+            while let Some(message) = connection.recv_message().await? {
+                handle_message(
+                    message,
+                    &mut controller,
+                    &mut keys_state,
+                    &mut double_tap_state,
+                    &args,
+                )
+                .await?;
             }
-            drop(controller);
+
+            info!("Controller disconnected: {name}");
+            Ok(())
         }
-        Err(err) => {
-            error!("{err}");
-        }
+        Err(err) => Err(err),
     }
 }
 
-async fn handle_messages(
-    msg: &Utf8Bytes,
+async fn handle_message(
+    controller_msg: message::Message,
     device: &mut Controller,
     keys_state: &mut HashMap<u8, KeyState>,
     double_tap_state: &mut HashMap<u8, Instant>,
     args: &Args,
 ) -> anyhow::Result<()> {
-    let controller_msg = serde_json::from_str::<message::Message>(msg)?;
-
     match controller_msg {
         message::Message::Dpad {
             id: _,

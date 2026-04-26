@@ -67,7 +67,6 @@ impl Controller {
     }
 
     pub fn synchronize(&self) -> anyhow::Result<()> {
-        println!("{:#?}", self.report);
         self.device.update(&self.report)?;
         Ok(())
     }
