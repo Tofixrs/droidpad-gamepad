@@ -10,9 +10,8 @@ use evdev_rs::enums::EV_SYN;
 use evdev_rs::enums::EventCode;
 
 use anyhow::anyhow;
-use clap::Parser;
 
-use crate::Args;
+use crate::controller::Options;
 use crate::controller::KeyState;
 use crate::keys::Key;
 use crate::message::KeyEvent;
@@ -20,12 +19,21 @@ use crate::message::KeyEvent;
 const UINPUT_AXIS_MIN: i32 = -32768;
 const UINPUT_AXIS_MAX: i32 = 32767;
 
+#[derive(Clone, Debug, Default, clap::Args)]
+pub struct Options {}
+
+impl Options {
+    pub fn initialize(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
 pub struct Controller {
     device: UInputDevice,
 }
 
 impl Controller {
-    pub fn new(device_name: &str) -> anyhow::Result<Self> {
+    pub fn new(device_name: &str, _options: &Options) -> anyhow::Result<Self> {
         use evdev_rs::{
             AbsInfo, DeviceWrapper, UninitDevice,
             enums::{BusType, EV_ABS, EV_KEY, EV_SYN, EventCode},

@@ -1,110 +1,97 @@
-use std::sync::{LazyLock, Mutex};
+#[cfg(feature = "vjoy")]
+#[path = "vjoy.rs"]
+mod vjoy;
 
-use log::info;
-use vjoy::{ButtonState, Device, VJoy};
+#[cfg(feature = "vigem")]
+#[path = "vigembus.rs"]
+mod vigembus;
 
-use crate::{keys::Key, message::KeyEvent};
-use anyhow::anyhow;
+use crate::keys::Key;
 
-pub struct Controller {
-    device: Device,
+#[derive(Clone, Debug, clap::Args)]
+pub struct Options {
+    #[arg(long, value_enum, default_value_t = default_backend())]
+    backend: Backend,
+
+    #[cfg(feature = "vjoy")]
+    #[arg(long, default_value_t = 0)]
+    /// Sets the vjoy device to use when `--backend vjoy` is selected
+    vjoy_device: u8,
 }
 
-static VJOY_ID: LazyLock<Mutex<u8>> = LazyLock::new(|| Mutex::new(1));
-static VJOY: LazyLock<Mutex<VJoy>> =
-    LazyLock::new(|| Mutex::new(VJoy::from_default_dll_location().expect("Failed to init vjoy")));
-
-impl Controller {
-    //device_name only here so its easier to do multi platform
-    pub fn new(_device_name: &str) -> anyhow::Result<Self> {
-        let Ok(vjoy) = VJOY.lock() else {
-            return Err(anyhow!("Failed to get vjoy"));
-        };
-
-        let Ok(mut device_id) = VJOY_ID.lock() else {
-            return Err(anyhow!("Failed to get device id"));
-        };
-        let device = vjoy.get_device_state(device_id.clone() as u32)?;
-        info!("Connecting vjoy device {device_id}");
-        *device_id += 1;
-        Ok(Self { device })
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            backend: default_backend(),
+            #[cfg(feature = "vjoy")]
+            vjoy_device: 0,
+        }
     }
-    pub fn write_input(&mut self, key: Key) -> anyhow::Result<()> {
-        let t: (u8, Value) = key.into();
-        match t {
-            (axis, Value::Axis(v)) => self.device.set_axis(axis as u32, v),
-            (key, Value::Button(state)) => self.device.set_button(key, state),
-        }?;
+}
+
+impl Options {
+    pub fn initialize(&self) -> anyhow::Result<()> {
+        #[cfg(feature = "vjoy")]
+        if matches!(self.backend, Backend::Vjoy) {
+            vjoy::set_device_id(self.vjoy_device)?;
+        }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+enum Backend {
+    #[cfg(feature = "vigem")]
+    Vigem,
+    #[cfg(feature = "vjoy")]
+    Vjoy,
+}
+
+const fn default_backend() -> Backend {
+    #[cfg(feature = "vigem")]
+    {
+        Backend::Vigem
+    }
+
+    #[cfg(all(not(feature = "vigem"), feature = "vjoy"))]
+    {
+        Backend::Vjoy
+    }
+}
+
+pub enum Controller {
+    #[cfg(feature = "vigem")]
+    Vigem(vigembus::Controller),
+    #[cfg(feature = "vjoy")]
+    Vjoy(vjoy::Controller),
+}
+
+impl Controller {
+    pub fn new(device_name: &str, options: &Options) -> anyhow::Result<Self> {
+        match options.backend {
+            #[cfg(feature = "vigem")]
+            Backend::Vigem => Ok(Self::Vigem(vigembus::Controller::new(device_name)?)),
+            #[cfg(feature = "vjoy")]
+            Backend::Vjoy => Ok(Self::Vjoy(vjoy::Controller::new(device_name)?)),
+        }
+    }
+
+    pub fn write_input(&mut self, key: Key) -> anyhow::Result<()> {
+        match self {
+            #[cfg(feature = "vigem")]
+            Self::Vigem(controller) => controller.write_input(key),
+            #[cfg(feature = "vjoy")]
+            Self::Vjoy(controller) => controller.write_input(key),
+        }
     }
 
     pub fn synchronize(&mut self) -> anyhow::Result<()> {
-        let Ok(mut vjoy) = VJOY.lock() else {
-            return Err(anyhow!("Failed to get vjoy"));
-        };
-        vjoy.update_device_state(&self.device)?;
-        Ok(())
-    }
-}
-
-impl Drop for Controller {
-    fn drop(&mut self) {
-        let Ok(mut device_id) = VJOY_ID.lock() else {
-            return;
-        };
-        *device_id -= 1;
-    }
-}
-
-impl From<KeyEvent> for ButtonState {
-    fn from(value: KeyEvent) -> Self {
-        match value {
-            KeyEvent::Release => ButtonState::Released,
-            KeyEvent::Press => ButtonState::Pressed,
+        match self {
+            #[cfg(feature = "vigem")]
+            Self::Vigem(controller) => controller.synchronize(),
+            #[cfg(feature = "vjoy")]
+            Self::Vjoy(controller) => controller.synchronize(),
         }
     }
-}
-
-enum Value {
-    Axis(i32),
-    Button(ButtonState),
-}
-
-impl From<KeyEvent> for Value {
-    fn from(value: KeyEvent) -> Self {
-        Self::Button(value.into())
-    }
-}
-
-impl From<Key> for (u8, Value) {
-    fn from(value: Key) -> Self {
-        match value {
-            Key::A(state) => (1, state.into()),
-            Key::B(state) => (2, state.into()),
-            Key::X(state) => (3, state.into()),
-            Key::Y(state) => (4, state.into()),
-            Key::LeftJoystickX(x) => (1, Value::Axis(map_vjoy(x))),
-            Key::LeftJoystickY(y) => (2, Value::Axis(map_vjoy(-y))),
-            Key::RightJoystickX(x) => (3, Value::Axis(map_vjoy(x))),
-            Key::RightJoystickY(y) => (4, Value::Axis(map_vjoy(-y))),
-            Key::BumperLeft(state) => (5, state.into()),
-            Key::BumperRight(state) => (6, state.into()),
-            Key::TriggerLeft(state) => (7, state.into()),
-            Key::TriggerRight(state) => (8, state.into()),
-            Key::Select(state) => (9, state.into()),
-            Key::Start(state) => (10, state.into()),
-            Key::ThumbLeft(key_event) => (11, key_event.into()),
-            Key::ThumbRight(key_event) => (12, key_event.into()),
-            Key::DPadUp(state) => (13, state.into()),
-            Key::DPadDown(state) => (14, state.into()),
-            Key::DPadLeft(state) => (15, state.into()),
-            Key::DPadRight(state) => (16, state.into()),
-        }
-    }
-}
-
-fn map_vjoy(value: f32) -> i32 {
-    let normalized_value = (value + 1.0) / 2.0;
-    (normalized_value * 32767.0 + 0.5) as i32
 }

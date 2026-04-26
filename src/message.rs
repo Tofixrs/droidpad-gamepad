@@ -24,3 +24,13 @@ pub enum KeyEvent {
     #[serde(alias = "PRESS")]
     Press = 1,
 }
+
+
+impl From<KeyEvent> for bool {
+    fn from(value: KeyEvent) -> Self {
+        match value {
+            KeyEvent::Release => false,
+            KeyEvent::Press => true,
+        }
+    }
+}

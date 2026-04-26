@@ -10,7 +10,7 @@ mod windows;
 #[cfg(target_os = "windows")]
 pub use windows::*;
 
-use crate::message::KeyEvent;
+use crate::{message::KeyEvent};
 
 #[derive(Debug, Default)]
 pub enum KeyState {
@@ -28,3 +28,4 @@ impl From<KeyEvent> for KeyState {
         }
     }
 }
+
