@@ -1,28 +1,28 @@
 #[cfg(feature = "vjoy")]
-#[path = "vjoy.rs"]
 mod vjoy;
 
 #[cfg(feature = "vigem")]
-#[path = "vigembus.rs"]
 mod vigembus;
 
-use crate::keys::Key;
+use crate::input::Key;
 
-#[derive(Clone, Debug, clap::Args)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, clap::Args, Serialize, Deserialize)]
 pub struct Options {
-    #[arg(long, value_enum, default_value_t = default_backend())]
-    backend: Backend,
+    #[arg(long, value_enum, default_value_t = Backend::default())]
+    pub backend: Backend,
 
     #[cfg(feature = "vjoy")]
     #[arg(long, default_value_t = 0)]
     /// Sets the vjoy device to use when `--backend vjoy` is selected
-    vjoy_device: u8,
+    pub vjoy_device: u8,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
-            backend: default_backend(),
+            backend: Backend::default(),
             #[cfg(feature = "vjoy")]
             vjoy_device: 0,
         }
@@ -40,23 +40,25 @@ impl Options {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-enum Backend {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum, Serialize, Deserialize)]
+pub enum Backend {
     #[cfg(feature = "vigem")]
     Vigem,
     #[cfg(feature = "vjoy")]
     Vjoy,
 }
 
-const fn default_backend() -> Backend {
-    #[cfg(feature = "vigem")]
-    {
-        Backend::Vigem
+#[cfg(feature = "vigem")]
+impl Default for Backend {
+    fn default() -> Self {
+        return Backend::Vigem;
     }
+}
 
-    #[cfg(all(not(feature = "vigem"), feature = "vjoy"))]
-    {
-        Backend::Vjoy
+#[cfg(all(not(feature = "vigem"), feature = "vjoy"))]
+impl Default for Backend {
+    fn default() -> Self {
+        return Backend::Vjoy;
     }
 }
 

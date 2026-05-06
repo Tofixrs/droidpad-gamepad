@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.tofixrs.droidpad-gamepad</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Droidpad Gamepad</name>
+  <summary>Use DroidPad as a game controller on Linux</summary>
+  <description>
+    <p>
+      Droidpad Gamepad is a server that lets you use the DroidPad mobile app as a game controller on your Linux PC.
+      It supports WebSocket and Bluetooth transports and emulates a virtual controller using evdev.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.tofixrs.droidpad-gamepad.desktop</launchable>
+  <url type="homepage">https://github.com/Tofixrs/droidpad-gamepad</url>
+</component>

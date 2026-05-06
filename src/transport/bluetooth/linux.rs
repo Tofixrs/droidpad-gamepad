@@ -7,8 +7,11 @@ use futures_util::StreamExt;
 use log::info;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-use super::{Transport, TransportConnection};
-use crate::{Args, message::Message};
+use crate::{
+    app::Args,
+    input::Message,
+    transport::{Transport, TransportConnection},
+};
 
 pub struct BluetoothTransport {
     profile_handle: Option<ProfileHandle>,
@@ -16,7 +19,9 @@ pub struct BluetoothTransport {
 
 impl BluetoothTransport {
     pub fn new() -> Self {
-        Self { profile_handle: None }
+        Self {
+            profile_handle: None,
+        }
     }
 }
 
@@ -109,19 +114,21 @@ impl TransportConnection for BluetoothTransportConnection {
     }
 
     async fn recv_message(&mut self) -> anyhow::Result<Option<Message>> {
-        let mut line = String::new();
-        let bytes_read = self.reader.read_line(&mut line).await?;
-        if bytes_read == 0 {
-            return Ok(None);
-        }
+        loop {
+            let mut line = String::new();
+            let bytes_read = self.reader.read_line(&mut line).await?;
+            if bytes_read == 0 {
+                return Ok(None);
+            }
 
-        let line = line.trim_matches(|c| c == '\r' || c == '\n' || c == '\0');
-        if line.is_empty() {
-            return Ok(None);
-        }
+            let line = line.trim_matches(|c| c == '\r' || c == '\n' || c == '\0');
+            if line.is_empty() {
+                continue;
+            }
 
-        Message::from_droidpad_csv(line)
-            .context("Failed to parse Bluetooth RFCOMM message")
-            .map(Some)
+            return Message::from_droidpad_csv(line)
+                .context("Failed to parse Bluetooth RFCOMM message")
+                .map(Some);
+        }
     }
 }

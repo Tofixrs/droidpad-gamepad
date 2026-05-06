@@ -1,0 +1,54 @@
+app-id: io.github.tofixrs.droidpad-gamepad
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: droidpad-gamepad
+finish-args:
+  - --socket=wayland
+  - --socket=x11
+  - --share=ipc
+  - --device=all
+  - --share=network
+  - --system-talk-name=org.bluez
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --filesystem=xdg-run/tray-icon:create 
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/droidpad-gamepad/cargo
+modules:
+  - name: libevdev
+    buildsystem: autotools
+    sources:
+      - type: archive
+        url: https://www.freedesktop.org/software/libevdev/libevdev-1.13.1.tar.xz
+        sha256: 06a77bf2ac5c993305882bc1641017f5bec1592d6d1b64787bad492ab34f2f36
+  - name: xdotool
+    buildsystem: simple
+    build-commands:
+      - make PREFIX=/app
+      - make PREFIX=/app install
+    sources:
+      - type: archive
+        url: https://github.com/jordansissel/xdotool/archive/v4.20260303.1.tar.gz
+        sha256: c1f971a384da588eb99ca0755fc4300316d49c1e612537e3f1de52215e104fa3
+  - ./shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+  - name: droidpad-gamepad
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/droidpad-gamepad/cargo
+      build-args:
+        - --share=network
+    build-commands:
+      - cargo build --release
+      - install -Dm755 target/release/droidpad-gamepad /app/bin/droidpad-gamepad
+      - install -Dm644 res/icon.png /app/share/icons/hicolor/512x512/apps/io.github.tofixrs.droidpad-gamepad.png
+      - install -Dm644 res/io.github.tofixrs.droidpad-gamepad.desktop /app/share/applications/io.github.tofixrs.droidpad-gamepad.desktop
+      - install -Dm644 res/io.github.tofixrs.droidpad-gamepad.metainfo.xml /app/share/metainfo/io.github.tofixrs.droidpad-gamepad.metainfo.xml
+    sources:
+      - type: dir
+        path: ..

@@ -67,7 +67,6 @@ impl KeyEvent {
     }
 }
 
-
 impl From<KeyEvent> for bool {
     fn from(value: KeyEvent) -> Self {
         match value {

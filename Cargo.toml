@@ -2,40 +2,55 @@
 name = "droidpad-gamepad"
 version = "0.1.0"
 edition = "2024"
+description = "A server to use DroidPad as a game controller on Linux and Windows"
+repository = "https://github.com/Tofixrs/droidpad-gamepad"
+homepage = "https://github.com/Tofixrs/droidpad-gamepad"
+keywords = ["gamepad", "controller", "droidpad", "remote", "uinput"]
+license = "GPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1.0.98"
 clap = { version = "4.5.40", features = ["derive"] }
+crossbeam-channel = "0.5.15"
 futures-util = "0.3.31"
+dirs = "6.0.0"
+gpui = { git = "https://github.com/zed-industries/zed" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit", "x11", "wayland"] }
+gpui-component = { git = "https://github.com/longbridge/gpui-component" }
 local-ip-address = "0.6.5"
 log = "0.4.27"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 tokio = { version = "1.46.0", features = ["full"] }
-tokio-tungstenite = "0.28.0"
+tokio-tungstenite = "0.29.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tray-icon = "0.23.1"
+image = "0.25.10"
 
 
 [target.'cfg(target_os = "linux")'.dependencies]
 bluer = { version = "0.17.4", features = ["full"] }
 evdev-rs = "0.6.2"
+gtk = "0.18"
 
 [target.'cfg(target_os = "windows")'.dependencies]
-vjoy = {version = "0.6.0", optional = true}
+vjoy = {version = "0.7.1", optional = true}
 vigem-rust = {version = "0.1.1", optional = true}
 windows = { version = "0.62.2", features = [
   "Devices_Bluetooth_Rfcomm",
   "Foundation",
   "Networking_Sockets",
   "Storage_Streams",
+  "Win32_UI_WindowsAndMessaging",
 ] }
 
 [features]
-default = ["vigem", "vjoy", "ws", "bluetooth"]
+default = ["vigem", "vjoy", "ws", "bluetooth", "ui"]
 vigem = ["dep:vigem-rust"]
 vjoy = ["dep:vjoy"]
 ws = []
 bluetooth = []
+ui = []
 
 [profile.dev]
 opt-level = 1
@@ -43,3 +58,4 @@ opt-level = 1
 # Enable a large amount of optimization in the dev profile for dependencies.
 [profile.dev.package."*"]
 opt-level = 3
+

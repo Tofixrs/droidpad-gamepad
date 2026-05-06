@@ -1,4 +1,4 @@
-use crate::message::KeyEvent;
+use crate::input::KeyEvent;
 
 #[derive(Copy, Clone)]
 pub enum Key {
@@ -22,6 +22,7 @@ pub enum Key {
     BumperLeft(KeyEvent),
     TriggerRight(KeyEvent),
     BumperRight(KeyEvent),
+    Mode(KeyEvent),
 }
 
 impl Key {
@@ -47,6 +48,7 @@ impl Key {
             Key::BumperRight(state) => Some(state),
             Key::ThumbRight(key_event) => Some(key_event),
             Key::ThumbLeft(key_event) => Some(key_event),
+            Key::Mode(key_event) => Some(key_event),
         }
     }
 }
@@ -74,6 +76,7 @@ impl From<Key> for u8 {
             Key::BumperRight(_) => 17,
             Key::ThumbRight(_) => 18,
             Key::ThumbLeft(_) => 19,
+            Key::Mode(_) => 20,
         }
     }
 }

@@ -18,11 +18,13 @@
               (import inputs.rust-overlay)
             ];
           };
-          rustToolchain = pkgs.rust-bin.selectLatestNightlyWith (toolchain:
-            toolchain.default.override {
-              extensions = ["rustc-codegen-cranelift-preview"];
-            });
+          rustToolchain = p:
+            p.rust-bin.selectLatestNightlyWith (toolchain:
+              toolchain.default.override {
+                extensions = ["rustc-codegen-cranelift-preview"];
+              });
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
+          craneLibWindows = (inputs.crane.mkLib pkgs.pkgsCross.mingwW64).overrideToolchain rustToolchain;
         };
       };
       imports = [

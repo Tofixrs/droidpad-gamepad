@@ -1,4 +1,5 @@
 use anyhow::{Context, anyhow};
+use log::info;
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use windows::{
     Devices::Bluetooth::Rfcomm::{RfcommServiceId, RfcommServiceProvider},
@@ -9,8 +10,11 @@ use windows::{
     Storage::Streams::{DataReader, InputStreamOptions},
 };
 
-use super::{Transport, TransportConnection};
-use crate::{Args, message::Message};
+use crate::{
+    app::Args,
+    input::Message,
+    transport::{Transport, TransportConnection},
+};
 
 pub struct BluetoothTransport {
     listener: Option<StreamSocketListener>,
@@ -35,12 +39,19 @@ impl Transport for BluetoothTransport {
 
     async fn listen(&mut self, _args: Args) -> anyhow::Result<()> {
         if self.listener.is_some() {
+            info!("Windows Bluetooth RFCOMM listener already running");
             return Ok(());
         }
 
-        let provider =
-            RfcommServiceProvider::CreateAsync(&RfcommServiceId::SerialPort()?)?.await?;
-        let listener = StreamSocketListener::new()?;
+        info!("Starting Windows Bluetooth RFCOMM transport");
+        let provider = RfcommServiceProvider::CreateAsync(&RfcommServiceId::SerialPort()?)
+            .context("Failed to create Windows Bluetooth RFCOMM service provider")?
+            .await
+            .context("Failed to initialize Windows Bluetooth RFCOMM service provider")?;
+        info!("Created Windows Bluetooth RFCOMM service provider");
+        let listener = StreamSocketListener::new()
+            .context("Failed to create Windows Bluetooth socket listener")?;
+        info!("Created Windows Bluetooth socket listener");
         let (sender, receiver) = unbounded_channel();
 
         let connection_received = TypedEventHandler::<
@@ -51,11 +62,26 @@ impl Transport for BluetoothTransport {
             let _ = sender.send(socket);
             Ok(())
         });
-        let token = listener.ConnectionReceived(&connection_received)?;
+        let token = listener
+            .ConnectionReceived(&connection_received)
+            .context("Failed to subscribe to Windows Bluetooth connection events")?;
+        info!("Registered Windows Bluetooth connection handler token {token}");
 
-        let service_name = provider.ServiceId()?.AsString()?;
-        listener.BindServiceNameAsync(&service_name)?.await?;
-        provider.StartAdvertisingWithRadioDiscoverability(&listener, true)?;
+        let service_name = provider
+            .ServiceId()
+            .context("Failed to get Windows Bluetooth service ID")?
+            .AsString()
+            .context("Failed to stringify Windows Bluetooth service ID")?;
+        listener
+            .BindServiceNameAsync(&service_name)
+            .context("Failed to bind Windows Bluetooth service name")?
+            .await
+            .context("Failed while waiting for Windows Bluetooth service bind")?;
+        info!("Bound Windows Bluetooth service name: {service_name}");
+        provider
+            .StartAdvertisingWithRadioDiscoverability(&listener, true)
+            .context("Failed to start Windows Bluetooth advertising")?;
+        info!("Started Windows Bluetooth advertising as discoverable");
 
         self.connection_received_token = Some(token);
         self.receiver = Some(receiver);
@@ -69,11 +95,13 @@ impl Transport for BluetoothTransport {
         let receiver = self
             .receiver
             .as_mut()
-            .ok_or_else(|| anyhow!("Bluetooth transport is not listening"))?;
+            .ok_or_else(|| anyhow!("Bluetooth transport is not listening. Ensure Windows Bluetooth is enabled and the application has permissions."))?;
+        info!("Waiting for a Windows Bluetooth connection");
         let socket = receiver
             .recv()
             .await
-            .ok_or_else(|| anyhow!("Bluetooth listener connection channel closed"))?;
+            .ok_or_else(|| anyhow!("Bluetooth listener connection channel closed unexpectedly."))?;
+        info!("Windows Bluetooth connection received");
 
         BluetoothTransportConnection::new(socket)
     }

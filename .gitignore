@@ -1,10 +1,7 @@
 /target
 result*
-.direnv/
+/.direnv
+/.flatpak-builder
+/build
 
 
-# Added by cargo
-#
-# already existing elements were commented out
-
-#/target

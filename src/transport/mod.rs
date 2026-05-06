@@ -1,11 +1,9 @@
-#[cfg(all(feature = "bluetooth", target_os = "linux"))]
+#[cfg(feature = "bluetooth")]
 pub mod bluetooth;
-#[cfg(all(feature = "bluetooth", target_os = "windows"))]
-pub mod bluetooth_windows;
 #[cfg(feature = "ws")]
 pub mod ws;
 
-use crate::{Args, message::Message};
+use crate::{app::Args, input::Message};
 
 pub trait Transport {
     type Connection: TransportConnection;

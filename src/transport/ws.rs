@@ -7,7 +7,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::{WebSocketStream, accept_async, tungstenite::Message as WsMessage};
 
 use super::{Transport, TransportConnection};
-use crate::{Args, message::Message};
+use crate::{app::Args, input::Message};
 
 #[derive(Default)]
 pub struct WsTransport {

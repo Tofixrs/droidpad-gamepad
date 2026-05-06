@@ -9,8 +9,11 @@ permissions:
 
 jobs:
   windows-build:
-    name: Windows build
+    name: Windows build (${{ matrix.features }})
     runs-on: windows-latest
+    strategy:
+      matrix:
+        features: [default, no-ui]
     steps:
       - uses: actions/checkout@v4
 
@@ -19,9 +22,46 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.features }}
 
       - name: Build release binary
-        run: cargo build --release
+        run: |
+          if ("${{ matrix.features }}" -eq "no-ui") {
+            cargo build --release --no-default-features --features "vigem,vjoy,ws,bluetooth"
+          } else {
+            cargo build --release
+          }
+
+  linux-build:
+    name: Linux build (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features: [default, no-ui]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libevdev-dev libxkbcommon-dev libdbus-1-dev libxcb1-dev libwayland-dev libvulkan-dev libayatana-appindicator3-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.features }}
+
+      - name: Build release binary
+        run: |
+          if [ "${{ matrix.features }}" = "no-ui" ]; then
+            cargo build --release --no-default-features --features "ws,bluetooth"
+          else
+            cargo build --release
+          fi
 
   nix-flake-build:
     name: Nix flake build

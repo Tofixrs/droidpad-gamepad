@@ -9,9 +9,52 @@ permissions:
   contents: write
 
 jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        shell: bash
+        run: |
+          current_tag="${GITHUB_REF_NAME}"
+          previous_tag="$(git tag --sort=-v:refname | grep -Fxv "${current_tag}" | head -n 1 || true)"
+
+          {
+            echo "# Changelog"
+            echo
+            if [ -n "${previous_tag}" ]; then
+              echo "Changes since ${previous_tag}:"
+              echo
+              git log --format='- %s' "${previous_tag}..HEAD"
+            else
+              echo "Initial release changes:"
+              echo
+              git log --format='- %s'
+            fi
+          } > release-notes.md
+
+      - name: Create GitHub release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+
   windows-release:
-    name: Windows release
+    name: Windows release (${{ matrix.target }})
+    needs: create-release
     runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [ui, cli]
     steps:
       - uses: actions/checkout@v4
 
@@ -20,13 +63,51 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
 
       - name: Build release binary
-        run: cargo build --release --locked
+        run: |
+          if ("${{ matrix.target }}" -eq "cli") {
+            cargo build --release --locked --no-default-features --features "vigem,vjoy,ws,bluetooth"
+            mv target/release/droidpad-gamepad.exe target/release/droidpad-gamepad-cli.exe
+          } else {
+            cargo build --release --locked
+          }
 
-      - name: Publish GitHub release
+      - name: Publish to GitHub release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_name }}
           files: |
-            target/release/droidpad-gamepad.exe
-            Game.Controller.json
+            target/release/droidpad-gamepad${{ matrix.target == 'cli' && '-cli' || '' }}.exe
+            res/Game.Controller.json
+          fail_on_unmatched_files: true
+
+  flatpak-release:
+    name: Flatpak release (${{ matrix.target }})
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [ui, cli]
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-24.08
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: droidpad-gamepad${{ matrix.target == 'cli' && '-cli' || '' }}.flatpak
+          manifest-path: flatpak/io.github.tofixrs.droidpad-gamepad${{ matrix.target == 'cli' && '-cli' || '' }}.yaml
+          cache-key: flatpak-builder-${{ matrix.target }}-${{ github.sha }}
+          upload-artifact: false
+
+      - name: Publish to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: droidpad-gamepad${{ matrix.target == 'cli' && '-cli' || '' }}.flatpak
+          fail_on_unmatched_files: true

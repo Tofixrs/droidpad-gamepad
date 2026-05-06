@@ -10,12 +10,14 @@ use evdev_rs::enums::EventCode;
 
 use anyhow::anyhow;
 
-use crate::keys::Key;
+use crate::input::Key;
 
 const UINPUT_AXIS_MIN: i32 = -32768;
 const UINPUT_AXIS_MAX: i32 = 32767;
 
-#[derive(Clone, Debug, Default, clap::Args)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Default, clap::Args, Serialize, Deserialize)]
 pub struct Options {}
 
 impl Options {
@@ -69,10 +71,10 @@ impl Controller {
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_THUMBL))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_THUMBR))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_SOUTH))?;
-        u.enable(EventCode::EV_KEY(EV_KEY::BTN_SOUTH))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_EAST))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_NORTH))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_WEST))?;
+        u.enable(EventCode::EV_KEY(EV_KEY::BTN_MODE))?;
 
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_DPAD_UP))?;
         u.enable(EventCode::EV_KEY(EV_KEY::BTN_DPAD_DOWN))?;
@@ -131,7 +133,7 @@ impl From<Key> for InputEvent {
             Key::LeftJoystickX(v) => (EventCode::EV_ABS(EV_ABS::ABS_X), map_float_to_axis_value(v)),
             Key::LeftJoystickY(v) => (
                 EventCode::EV_ABS(EV_ABS::ABS_Y),
-                -map_float_to_axis_value(v),
+                map_float_to_axis_value(-v),
             ),
             Key::RightJoystickX(v) => (
                 EventCode::EV_ABS(EV_ABS::ABS_RX),
@@ -139,7 +141,7 @@ impl From<Key> for InputEvent {
             ),
             Key::RightJoystickY(v) => (
                 EventCode::EV_ABS(EV_ABS::ABS_RY),
-                -map_float_to_axis_value(v),
+                map_float_to_axis_value(-v),
             ),
             Key::DPadUp(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_UP), state as i32),
             Key::DPadDown(state) => (EventCode::EV_KEY(EV_KEY::BTN_DPAD_DOWN), state as i32),
@@ -157,6 +159,7 @@ impl From<Key> for InputEvent {
             Key::BumperRight(state) => (EventCode::EV_KEY(EV_KEY::BTN_TR), state as i32),
             Key::ThumbRight(key_event) => (EventCode::EV_KEY(EV_KEY::BTN_THUMBR), key_event as i32),
             Key::ThumbLeft(key_event) => (EventCode::EV_KEY(EV_KEY::BTN_THUMBL), key_event as i32),
+            Key::Mode(key_event) => (EventCode::EV_KEY(EV_KEY::BTN_MODE), key_event as i32),
         };
 
         InputEvent::new(&timeval_now(), &ev_code, val)

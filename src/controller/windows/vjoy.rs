@@ -3,7 +3,7 @@ use std::sync::{LazyLock, Mutex};
 use log::info;
 use vjoy::{ButtonState, Device, VJoy};
 
-use crate::{keys::Key, message::KeyEvent};
+use crate::input::{Key, KeyEvent};
 use anyhow::anyhow;
 
 pub struct Controller {
@@ -25,7 +25,6 @@ pub fn set_device_id(id: u8) -> anyhow::Result<()> {
     *device_id = id;
     Ok(())
 }
-
 
 impl Controller {
     //device_name only here so its easier to do multi platform
@@ -121,6 +120,7 @@ impl From<Key> for (u8, Value) {
             Key::DPadDown(state) => (14, state.into()),
             Key::DPadLeft(state) => (15, state.into()),
             Key::DPadRight(state) => (16, state.into()),
+            Key::Mode(state) => (17, state.into()),
         }
     }
 }

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Droidpad Gamepad
+Comment=Use DroidPad as a game controller
+Exec=droidpad-gamepad
+Icon=io.github.tofixrs.droidpad-gamepad
+Terminal=false
+Type=Application
+Categories=Game;Utility;
+Keywords=gamepad;controller;remote;
