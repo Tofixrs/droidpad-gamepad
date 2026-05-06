@@ -1,4 +1,4 @@
-name: CI
+name: "Win ci"
 
 on:
   push:
@@ -40,31 +40,3 @@ jobs:
           } else {
             cargo build --release
           }
-
-  nix-flake-build:
-    name: Nix flake build (${{ matrix.features }})
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        features: [default, no-ui]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Nix
-        uses: cachix/install-nix-action@v31
-        with:
-          key: ${{ matrix.features }}
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-            log-lines = 0
-
-      - name: Build flake package
-        run: |
-          if [ "${{ matrix.features }}" = "no-ui" ]; then
-            nix build "path:.#cli" --print-build-logs
-          else
-            nix build "path:.#ui" --print-build-logs
-          fi
-
