@@ -17,14 +17,26 @@ It currently supports:
 - [vJoy](https://github.com/BrunnerInnovation/vJoy/releases/tag/v2.2.2.0) for the `vjoy` backend
 
 ## Linux
+
+### Common / CLI
+- `pkg-config` (build time)
 - `libevdev`
-- `BlueZ` (for Bluetooth transport)
-- `libayatana-appindicator`
-- `xdotool` (for tray functionality)
-- `fontconfig`
-- `gtk3`
-- `wayland` / `libxkbcommon` (for UI)
 - `dbus`
+- `BlueZ` (for Bluetooth transport)
+
+### UI (Additional dependencies)
+- `libayatana-appindicator`
+- `gtk3`
+- `vulkan-loader`
+- `wayland` / `libxkbcommon`
+- `fontconfig` / `freetype`
+- `openssl`
+- `alsa-lib`
+- `libX11` and various X11 extensions (`libxcb`, `libxcursor`, `libxi`, etc.)
+- `xdotool` (for tray functionality)
+- `curl`
+- `glib` / `gdk-pixbuf` / `atk` / `pango`
+- `libGL`
 
 ### Virtual Controller Permissions (udev)
 To allow Droidpad to create a virtual controller without running as root, you need to install the provided udev rule:
