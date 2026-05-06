@@ -28,11 +28,11 @@ It currently supports:
 - `libayatana-appindicator`
 - `gtk3`
 - `vulkan-loader`
-- `wayland` / `libxkbcommon`
+- `wayland` / `libX11`
+- `libxkbcommon`
 - `fontconfig` / `freetype`
 - `openssl`
 - `alsa-lib`
-- `libX11` and various X11 extensions (`libxcb`, `libxcursor`, `libxi`, etc.)
 - `xdotool` (for tray functionality)
 - `curl`
 - `glib` / `gdk-pixbuf` / `atk` / `pango`
