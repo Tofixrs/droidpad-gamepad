@@ -51,9 +51,9 @@ jobs:
 
       - name: Build flake package
         run: |
-          if ("${{ matrix.features }}" -eq "no-ui") {
+          if [ "${{ matrix.features }}" = "no-ui" ]; then
             nix build .#cli
-          } else {
+          else
             nix build .#ui
-          }
+          fi
 
