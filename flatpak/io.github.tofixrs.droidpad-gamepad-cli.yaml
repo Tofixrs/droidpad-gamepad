@@ -29,18 +29,18 @@ modules:
       - type: archive
         url: https://github.com/jordansissel/xdotool/archive/v4.20260303.1.tar.gz
         sha256: c1f971a384da588eb99ca0755fc4300316d49c1e612537e3f1de52215e104fa3
-- name: droidpad-gamepad-cli
-  buildsystem: simple
-  build-options:
-    append-path: /usr/lib/sdk/rust-stable/bin
-    env:
-      CARGO_HOME: /run/build/droidpad-gamepad/cargo
-    build-args:
-      - --share=network
-  build-commands:
-    - cargo build --release --no-default-features --features "ws,bluetooth"
-    - install -Dm755 target/release/droidpad-gamepad /app/bin/droidpad-gamepad-cli
-  sources:
-    - type: dir
-      path: ..
+  - name: droidpad-gamepad-cli
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/droidpad-gamepad/cargo
+      build-args:
+        - --share=network
+    build-commands:
+      - cargo build --release --no-default-features --features "ws,bluetooth"
+      - install -Dm755 target/release/droidpad-gamepad /app/bin/droidpad-gamepad-cli
+    sources:
+      - type: dir
+        path: ..
 

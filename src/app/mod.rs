@@ -2,9 +2,13 @@
 mod runtime;
 
 use anyhow::anyhow;
-use log::{error, info, warn};
+use log::{error, info};
+#[cfg(feature = "ui")]
+use log::warn;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf, time::Instant};
+use std::{collections::HashMap, time::Instant};
+#[cfg(feature = "ui")]
+use std::{fs, path::PathBuf};
 
 use clap::Parser;
 #[cfg(feature = "ui")]
@@ -103,17 +107,19 @@ impl Default for TransportKind {
     }
 }
 
+#[cfg(feature = "ui")]
 pub struct SettingsManager;
 
+#[cfg(feature = "ui")]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct StoredSettings {
     #[serde(flatten)]
     args: Args,
-    #[cfg(feature = "ui")]
     #[serde(default)]
     theme_mode: Option<ThemeMode>,
 }
 
+#[cfg(feature = "ui")]
 impl SettingsManager {
     fn config_path() -> PathBuf {
         let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -136,7 +142,6 @@ impl SettingsManager {
 
         StoredSettings {
             args: Args::default(),
-            #[cfg(feature = "ui")]
             theme_mode: None,
         }
     }
@@ -157,7 +162,6 @@ impl SettingsManager {
         Self::save_stored(&settings)
     }
 
-    #[cfg(feature = "ui")]
     pub fn load_ui_settings(default_theme_mode: ThemeMode) -> (Args, Option<ThemeMode>) {
         let settings = Self::load_stored();
         let theme_mode = settings.theme_mode.or(Some(default_theme_mode));
@@ -167,7 +171,6 @@ impl SettingsManager {
         )
     }
 
-    #[cfg(feature = "ui")]
     pub fn save_theme_mode(theme_mode: ThemeMode) -> anyhow::Result<()> {
         let mut settings = Self::load_stored();
         settings.theme_mode = Some(theme_mode);

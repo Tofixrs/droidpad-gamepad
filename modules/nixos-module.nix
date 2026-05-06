@@ -1,8 +1,4 @@
-{
-  self,
-  lib,
-  ...
-}: {
+{self, ...}: {
   flake.nixosModules.default = {
     config,
     lib,
@@ -15,7 +11,7 @@
       enable = lib.mkEnableOption "Droidpad Gamepad server";
       package = lib.mkOption {
         type = lib.types.package;
-        default = self.packages.${pkgs.system}.default;
+        default = self.packages.${pkgs.system}.cli;
         description = "The Droidpad Gamepad package to use.";
       };
     };
