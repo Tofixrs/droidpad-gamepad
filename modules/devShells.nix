@@ -16,7 +16,7 @@ _: {
     devShells.default = pkgs.mkShell {
       name = "shell";
       inputsFrom = [
-        self'.packages.droidpad-gamepad
+        self'.packages.ui
       ];
       packages = with pkgs; [
         rust-analyzer

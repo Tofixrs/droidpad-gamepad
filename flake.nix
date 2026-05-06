@@ -2,6 +2,7 @@
   description = "Droidpad server to emulate a gamepad on linux";
 
   inputs = {
+    self.submodules = true;
     flake-parts.url = "github:hercules-ci/flake-parts";
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     crane.url = "github:ipetkov/crane";
@@ -24,7 +25,20 @@
                 extensions = ["rustc-codegen-cranelift-preview"];
               });
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
-          craneLibWindows = (inputs.crane.mkLib pkgs.pkgsCross.mingwW64).overrideToolchain rustToolchain;
+          rust-src = pkgs.lib.cleanSourceWith {
+            src = ./.;
+            filter = path: type: let
+              isAsset = pkgs.lib.any (suffix: pkgs.lib.hasSuffix suffix path) [
+                ".md"
+                ".png"
+                ".ttf"
+                ".scm"
+                ".json"
+                ".svg"
+              ];
+            in
+              isAsset || (craneLib.filterCargoSources path type);
+          };
         };
       };
       imports = [

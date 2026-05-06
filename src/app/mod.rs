@@ -257,7 +257,15 @@ pub(crate) async fn serve_transport_loop(
 pub async fn run_cli(args: Args) {
     init_logging();
 
-    if let Err(err) = run_service(args).await {
+    let transport = match start_transport(&args).await {
+        Ok(t) => t,
+        Err(err) => {
+            error!("{err}");
+            return;
+        }
+    };
+
+    if let Err(err) = serve_transport_loop(transport, args).await {
         error!("{err}");
     }
 }

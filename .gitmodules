@@ -1,3 +1,12 @@
 [submodule "flatpak/shared-modules"]
 	path = flatpak/shared-modules
 	url = https://github.com/flathub/shared-modules.git
+        shallow = true
+[submodule "third_party/zed"]
+	path = third_party/zed
+	url = https://github.com/zed-industries/zed/
+	shallow = true
+[submodule "third_party/gpui-component"]
+	path = third_party/gpui-component
+	url = https://github.com/longbridge/gpui-component/
+	shallow = true
