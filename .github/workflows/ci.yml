@@ -52,12 +52,13 @@ jobs:
           key: ${{ matrix.features }}
           extra_nix_config: |
             experimental-features = nix-command flakes
+            log-lines = 0
 
       - name: Build flake package
         run: |
           if [ "${{ matrix.features }}" = "no-ui" ]; then
-            nix build .#cli
+            nix build "path:.#cli" --print-build-logs
           else
-            nix build .#ui
+            nix build "path:.#ui" --print-build-logs
           fi
 
