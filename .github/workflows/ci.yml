@@ -16,6 +16,8 @@ jobs:
         features: [default, no-ui]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -41,6 +43,8 @@ jobs:
         features: [default, no-ui]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
