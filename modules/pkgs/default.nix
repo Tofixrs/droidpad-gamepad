@@ -5,7 +5,10 @@ _: {
     rust-src,
     ...
   }: let
+    cargoToml = builtins.fromTOML (builtins.readFile ../../Cargo.toml);
+    version = cargoToml.package.version;
     commonArgs = {
+      inherit version;
       src = rust-src;
       strictDeps = true;
       nativeBuildInputs = with pkgs; [

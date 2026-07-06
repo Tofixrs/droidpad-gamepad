@@ -1,6 +1,6 @@
 [package]
 name = "droidpad-gamepad"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 description = "A server to use DroidPad as a game controller on Linux and Windows"
 repository = "https://github.com/Tofixrs/droidpad-gamepad"
@@ -15,7 +15,7 @@ crossbeam-channel = "0.5.15"
 futures-util = "0.3.31"
 dirs = "6.0.0"
 gpui = { path = "./third_party/zed/crates/gpui", optional = true }
-gpui_platform = {path = "third_party/zed/crates/gpui_platform", optional = true}
+gpui_platform = {path = "third_party/zed/crates/gpui_platform", features = ["x11", "wayland"], optional = true}
 gpui-component = {path = "third_party/gpui-component/crates/ui", optional = true}
 local-ip-address = "0.6.5"
 log = "0.4.27"
