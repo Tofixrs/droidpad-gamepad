@@ -35,6 +35,7 @@
                 ".scm"
                 ".json"
                 ".svg"
+                ".wgsl"
               ];
             in
               isAsset || (craneLib.filterCargoSources path type);
