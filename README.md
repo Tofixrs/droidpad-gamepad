@@ -115,7 +115,7 @@ flatpak run io.github.tofixrs.droidpad-gamepad
 {
   inputs = {
     droidpad-gamepad = {
-     url = "github:Tofixrs/droidpad-gamepad";
+     url = "git+https://github.com/Tofixrs/droidpad-gamepad.git";
      inputs.nixpkgs.follows = "nixpkgs";
     }
   };
