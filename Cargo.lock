@@ -2732,7 +2732,7 @@ dependencies = [
  "futures",
  "futures-concurrency",
  "getrandom 0.3.4",
- "gpui_macros 0.1.0",
+ "gpui_macros",
  "gpui_shared_string",
  "gpui_util",
  "http_client",
@@ -2797,7 +2797,7 @@ dependencies = [
  "futures",
  "gpui",
  "gpui-component-macros",
- "gpui_macros 0.1.0 (git+https://github.com/zed-industries/zed)",
+ "gpui_macros",
  "html5ever",
  "instant",
  "itertools 0.13.0",
@@ -2927,17 +2927,6 @@ dependencies = [
 [[package]]
 name = "gpui_macros"
 version = "0.1.0"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn 2.0.118",
-]
-
-[[package]]
-name = "gpui_macros"
-version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed#e7311d52ba1b7ec8f2c1651e32bd78e0da4cbca9"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
