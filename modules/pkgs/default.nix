@@ -7,10 +7,17 @@ _: {
   }: let
     cargoToml = builtins.fromTOML (builtins.readFile ../../Cargo.toml);
     version = cargoToml.package.version;
+    cargoVendoredDeps = craneLib.vendorCargoDeps {
+      cargoLock = ../../Cargo.lock;
+      cargoVendorCargoDeps = true;
+    };
+
     commonArgs = {
       inherit version;
       src = rust-src;
       strictDeps = true;
+      cargoVendorCargoDeps = cargoVendoredDeps;
+      vendorCargoDeps = cargoVendoredDeps;
       nativeBuildInputs = with pkgs; [
         pkg-config
         makeWrapper

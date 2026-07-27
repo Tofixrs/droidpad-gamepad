@@ -19,15 +19,24 @@
               (import inputs.rust-overlay)
             ];
           };
-          rustToolchain = p:
-            p.rust-bin.selectLatestNightlyWith (toolchain:
-              toolchain.default.override {
-                extensions = ["rustc-codegen-cranelift-preview"];
-              });
+          rustToolchain = p: p.rust-bin.stable.latest.default;
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rustToolchain;
           rust-src = pkgs.lib.cleanSourceWith {
-            src = ./.;
+            src = pkgs.lib.cleanSource ./.;
             filter = path: type: let
+              relPath = pkgs.lib.removePrefix (toString ./. + "/") (toString path);
+              isIgnoredDir = pkgs.lib.any (dir: pkgs.lib.hasPrefix dir relPath) [
+                "target"
+                ".git"
+                ".direnv"
+                ".flatpak-builder"
+                "build"
+                "flatpak"
+                "third_party/zed/assets"
+                "third_party/zed/docs"
+                "third_party/zed/script"
+                "third_party/zed/extensions"
+              ];
               isAsset = pkgs.lib.any (suffix: pkgs.lib.hasSuffix suffix path) [
                 ".md"
                 ".png"
@@ -38,7 +47,7 @@
                 ".wgsl"
               ];
             in
-              isAsset || (craneLib.filterCargoSources path type);
+              !isIgnoredDir && (isAsset || (craneLib.filterCargoSources path type));
           };
         };
       };
@@ -48,3 +57,4 @@
       systems = ["x86_64-linux"];
     };
 }
+
